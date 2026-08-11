@@ -1,0 +1,6 @@
+openai
+SpeechRecognition
+gtts
+pygame
+fpdf2
+pyaudio

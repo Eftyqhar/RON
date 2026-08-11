@@ -1,0 +1,12 @@
+Testing /v1/chat/completions with DeepSeek-V4-Flash
+Status: 200
+Error: 'charmap' codec can't encode characters in position 261-262: character maps to <undefined>
+Traceback (most recent call last):
+  File "C:\Project\assistant\test_raw.py", line 24, in <module>
+    print(f"Response: {json.dumps(data, ensure_ascii=False, indent=2)}")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.1520.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 261-262: character maps to <undefined>
+
