@@ -9,7 +9,7 @@
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 [![Status](https://img.shields.io/badge/Status-Active-success?style=for-the-badge)]()
 
-*Built by [Ifteqhar](https://github.com/ifteqhar) — Your always-on desktop companion.*
+*Built by [Ifteqhar]([https://github.com/ifteqhar](https://github.com/Eftyqhar)) — Your always-on desktop companion.*
 
 </div>
 
@@ -89,8 +89,8 @@ It combines real-time speech recognition (Google Speech-to-Text), offline text-t
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/ifteqhar/ron-ai-assistant.git
-cd ron-ai-assistant
+git clone https://github.com/Eftyqhar/RON.git
+cd RON
 ```
 
 ### 2. Install Dependencies
@@ -334,8 +334,8 @@ Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for more informa
 
 **Ifteqhar**
 
-- GitHub: [@ifteqhar](https://github.com/ifteqhar)
-- Project: [ron-ai-assistant](https://github.com/ifteqhar/ron-ai-assistant)
+- GitHub: [@eftyqhar](https://github.com/Eftyqhar)
+- Project: [ron-ai-assistant](https://github.com/Eftyqhar/RON/)
 
 ---
 
