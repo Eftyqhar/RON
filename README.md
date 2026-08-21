@@ -11,6 +11,12 @@
 
 *Built by [Ifteqhar]([https://github.com/ifteqhar](https://github.com/Eftyqhar)) — Your always-on desktop companion.*
 
+<br>
+
+<img src="docs/screenshots/hud-standby.png" alt="R.O.N. holographic HUD at standby" width="100%">
+
+<sub>*The R.O.N. holographic HUD — live system telemetry, conversation log, and activity feed around a reactive core.*</sub>
+
 </div>
 
 ---
@@ -40,6 +46,36 @@ It combines real-time speech recognition (Google Speech-to-Text), offline text-t
 | 📄 **Generate PDFs** | *"Create a PDF about black holes"* → a formatted 3–5 page report in Documents |
 | 🔁 **Continuous Listening** | Always-on loop with smart shutdown phrases |
 | 🧩 **Modular Design** | Cleanly split into `main`, `voice`, and `tools` modules |
+
+---
+
+## 🖥️ The Holographic HUD
+
+Ron ships with a **frameless, fullscreen heads-up display** served locally by
+`ui_server.py` and streamed to the browser over Server-Sent Events. The core,
+waveform, and entire colour palette react in real time to Ron's internal state —
+alongside live CPU/RAM/GPU/disk/network telemetry, module health, a rolling
+conversation log, and a timestamped activity feed.
+
+```bash
+python ui_server.py          # or double-click run_ron_ui.bat
+```
+
+Opens a Chromium app window on `http://127.0.0.1:8765`. Pass `--no-voice` to run
+the interface without the microphone loop.
+
+### Interface States
+
+Every state constant in `bus.py` drives its own visual treatment:
+
+|  |  |
+|:--:|:--:|
+| <img src="docs/screenshots/hud-standby.png" alt="HUD in standby state" width="100%"><br>**`idle` → STANDBY**<br><sub>All systems nominal. Core at rest, waveform flat.</sub> | <img src="docs/screenshots/hud-listening.png" alt="HUD in listening state" width="100%"><br>**`listening` → LISTENING**<br><sub>Rings open up, live mic waveform, particle stream.</sub> |
+| <img src="docs/screenshots/hud-thinking.png" alt="HUD in processing state" width="100%"><br>**`thinking` → PROCESSING**<br><sub>Querying the model; activity logs *Reasoning over request*.</sub> | <img src="docs/screenshots/hud-executing.png" alt="HUD in executing state" width="100%"><br>**`executing` → EXECUTING**<br><sub>Core locks while a tool call runs — here, rendering a PDF.</sub> |
+| <img src="docs/screenshots/hud-speaking.png" alt="HUD in speaking state" width="100%"><br>**`speaking` → SPEAKING**<br><sub>The spoken reply is mirrored under the core as TTS plays.</sub> | <img src="docs/screenshots/hud-error.png" alt="HUD in error state" width="100%"><br>**`error` → SYSTEM ERROR**<br><sub>Palette swaps to red and the faulting module is flagged.</sub> |
+
+> Prefer the terminal? Everything above is optional — `python main.py` runs Ron
+> headless exactly as before.
 
 ---
 
