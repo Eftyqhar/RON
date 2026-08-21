@@ -1,0 +1,19 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Debug and capture artifacts
+sse_capture.txt
+ui_render_*.png
+
+# Generated PDFs
+*.pdf
+
+# Secrets
+.env

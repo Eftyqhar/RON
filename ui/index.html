@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en" data-state="idle" data-link="down">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R.O.N. — AI Voice Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=Rajdhani:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Ambient layers: canvas particles, grid, radial core glow, scan sweep -->
+<canvas id="bg-canvas" aria-hidden="true"></canvas>
+<div class="layer grid-layer" aria-hidden="true"></div>
+<div class="layer core-glow" aria-hidden="true"></div>
+<div class="layer scan-sweep" aria-hidden="true"></div>
+<div class="layer vignette" aria-hidden="true"></div>
+
+<div id="stage">
+
+  <!-- ══ TOP BAR ══════════════════════════════════════════════════════ -->
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true">
+        <circle cx="24" cy="24" r="21" class="bm-ring"/>
+        <circle cx="24" cy="24" r="15" class="bm-ring bm-dash"/>
+        <circle cx="24" cy="24" r="5.5" class="bm-core"/>
+        <path d="M24 3 v6 M24 39 v6 M3 24 h6 M39 24 h6" class="bm-tick"/>
+      </svg>
+      <div class="brand-text">
+        <h1>R.O.N.</h1>
+        <p>AI VOICE ASSISTANT</p>
+      </div>
+    </div>
+
+    <div class="sysline">
+      <span class="pulse-dot"></span>
+      <span id="system-status">SYSTEM ONLINE</span>
+      <span class="hair"></span>
+      <span class="mono micro dim" id="model-name">MODEL —</span>
+    </div>
+
+    <div class="status-cluster">
+      <div class="chip" id="chip-net" data-ok="unknown">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 6.5A9.5 9.5 0 0 1 15 6.5M3.5 9.5A6 6 0 0 1 12.5 9.5M6 12.4A2.7 2.7 0 0 1 10 12.4"/><circle cx="8" cy="14.6" r="1"/></svg>
+        <span>NET</span>
+      </div>
+      <div class="chip" id="chip-mic" data-ok="unknown" role="button" tabindex="0" title="Toggle microphone (M)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.6" y="1.6" width="4.8" height="8.2" rx="2.4"/><path d="M3.4 7.6a4.6 4.6 0 0 0 9.2 0M8 12.2v2.4"/></svg>
+        <span id="chip-mic-label">MIC</span>
+      </div>
+      <div class="chip" id="chip-sys" data-ok="unknown">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.2" y="2.2" width="11.6" height="11.6" rx="1.6"/><rect x="6" y="6" width="4" height="4" rx="0.6"/></svg>
+        <span id="chip-sys-label">CORE</span>
+      </div>
+      <div class="clock">
+        <b class="mono" id="clock">--:--:--</b>
+        <span class="micro dim" id="date">— — —</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ══ LEFT · SYSTEM MONITOR ════════════════════════════════════════ -->
+  <aside class="panel panel-left" style="--delay:.05s">
+    <div class="panel-head">
+      <h2>SYSTEM MONITOR</h2>
+      <span class="panel-id mono">01</span>
+    </div>
+    <div class="panel-body">
+      <div class="meter" id="meter-cpu">
+        <div class="meter-top"><span>CPU</span><b class="mono">--<i>%</i></b></div>
+        <div class="track"><div class="fill"></div></div>
+      </div>
+      <div class="meter" id="meter-ram">
+        <div class="meter-top"><span>RAM</span><b class="mono">--<i>%</i></b></div>
+        <div class="track"><div class="fill"></div></div>
+      </div>
+      <div class="meter" id="meter-gpu">
+        <div class="meter-top"><span>GPU</span><b class="mono">--<i>%</i></b></div>
+        <div class="track"><div class="fill"></div></div>
+      </div>
+      <div class="meter" id="meter-disk">
+        <div class="meter-top"><span>DISK</span><b class="mono">--<i>%</i></b></div>
+        <div class="track"><div class="fill"></div></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="readout">
+        <span>NETWORK</span>
+        <b id="net-state" class="accent">CHECKING</b>
+      </div>
+      <div class="readout sub">
+        <span class="mono micro">▼ <i id="net-down">0.0</i> KB/S</span>
+        <span class="mono micro">▲ <i id="net-up">0.0</i> KB/S</span>
+      </div>
+      <div class="readout">
+        <span>UPTIME</span>
+        <b class="mono" id="uptime">00:00:00</b>
+      </div>
+      <div class="readout">
+        <span>HOST</span>
+        <b class="mono" id="host">—</b>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ══ CENTRE · AI CORE ═════════════════════════════════════════════ -->
+  <main class="core-stage">
+    <div class="core" id="core">
+      <svg class="core-svg" viewBox="0 0 500 500" aria-hidden="true">
+        <defs>
+          <radialGradient id="g-core" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"   stop-color="var(--accent-bright)" stop-opacity=".92"/>
+            <stop offset="38%"  stop-color="var(--accent)"        stop-opacity=".30"/>
+            <stop offset="72%"  stop-color="var(--accent)"        stop-opacity=".07"/>
+            <stop offset="100%" stop-color="var(--accent)"        stop-opacity="0"/>
+          </radialGradient>
+          <radialGradient id="g-disc" cx="50%" cy="42%" r="62%">
+            <stop offset="0%"   stop-color="var(--accent)" stop-opacity=".13"/>
+            <stop offset="100%" stop-color="#02060A"       stop-opacity=".55"/>
+          </radialGradient>
+          <linearGradient id="g-sweep" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%"   stop-color="var(--accent)" stop-opacity="0"/>
+            <stop offset="100%" stop-color="var(--accent)" stop-opacity=".85"/>
+          </linearGradient>
+        </defs>
+
+        <!-- fine HUD tick collar -->
+        <circle class="ring ticks-fine spin-cw" r="240" cx="250" cy="250"/>
+        <circle class="ring ticks-major spin-cw" r="240" cx="250" cy="250"/>
+
+        <!-- hairline boundary -->
+        <circle class="ring hairline" r="226" cx="250" cy="250"/>
+
+        <!-- segmented technical ring -->
+        <circle class="ring segments spin-ccw" r="212" cx="250" cy="250"/>
+
+        <!-- rotating brackets -->
+        <g class="spin-cw slow">
+          <path class="bracket" d="M250 56 a194 194 0 0 1 137.2 56.8"/>
+          <path class="bracket" d="M250 444 a194 194 0 0 1 -137.2 -56.8"/>
+        </g>
+        <g class="spin-ccw">
+          <path class="bracket thin" d="M62 250 a188 188 0 0 1 40 -116"/>
+          <path class="bracket thin" d="M438 250 a188 188 0 0 1 -40 116"/>
+        </g>
+
+        <!-- dashed ring -->
+        <circle class="ring dashed spin-cw" r="176" cx="250" cy="250"/>
+
+        <!-- reactive radial waveform (bars injected by app.js) -->
+        <g id="radial-bars" class="radial-bars"></g>
+
+        <!-- scan / progress arc -->
+        <circle class="ring scan-arc" r="150" cx="250" cy="250" stroke="url(#g-sweep)"/>
+        <circle class="ring progress-arc" r="150" cx="250" cy="250"/>
+
+        <!-- amplitude-reactive ring -->
+        <circle class="ring reactive" id="reactive-ring" r="128" cx="250" cy="250"/>
+
+        <!-- inner glass disc + glow -->
+        <circle class="disc" r="112" cx="250" cy="250" fill="url(#g-disc)"/>
+        <circle class="disc-edge" r="112" cx="250" cy="250"/>
+        <circle class="glow-core" id="glow-core" r="96" cx="250" cy="250" fill="url(#g-core)"/>
+
+        <!-- orbiting indicators -->
+        <g class="orbit orbit-1"><circle class="orb" cx="250" cy="54" r="3.6"/></g>
+        <g class="orbit orbit-2"><circle class="orb sm" cx="250" cy="88" r="2.4"/></g>
+        <g class="orbit orbit-3"><circle class="orb sm" cx="250" cy="72" r="2"/><circle class="orb sm" cx="250" cy="428" r="2"/></g>
+
+        <!-- cardinal markings -->
+        <g class="cardinals">
+          <text x="250" y="24" text-anchor="middle">000</text>
+          <text x="484" y="254" text-anchor="end">090</text>
+          <text x="250" y="490" text-anchor="middle">180</text>
+          <text x="16"  y="254">270</text>
+        </g>
+      </svg>
+
+      <div class="core-center">
+        <div class="core-label">RON</div>
+        <div class="core-state" id="core-state">STANDBY</div>
+        <div class="core-detail mono" id="core-detail">ALL SYSTEMS NOMINAL</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ══ RIGHT · ACTIVE MODULES ═══════════════════════════════════════ -->
+  <aside class="panel panel-right" style="--delay:.1s">
+    <div class="panel-head">
+      <h2>ACTIVE MODULES</h2>
+      <span class="panel-id mono">02</span>
+    </div>
+    <div class="panel-body">
+      <ul class="modules" id="modules">
+        <li data-key="voice"   data-ok="unknown"><i class="led"></i><span>VOICE ENGINE</span><b class="mono">—</b></li>
+        <li data-key="core"    data-ok="unknown"><i class="led"></i><span>AI CORE</span><b class="mono">—</b></li>
+        <li data-key="tools"   data-ok="unknown"><i class="led"></i><span>TOOL ENGINE</span><b class="mono">—</b></li>
+        <li data-key="audio"   data-ok="unknown"><i class="led"></i><span>AUDIO SYSTEM</span><b class="mono">—</b></li>
+        <li data-key="network" data-ok="unknown"><i class="led"></i><span>NETWORK</span><b class="mono">—</b></li>
+      </ul>
+
+      <div class="divider"></div>
+
+      <div class="readout"><span>INPUT</span><b class="mono ellipsis" id="mic-device">—</b></div>
+      <div class="readout"><span>SYNTH</span><b class="mono ellipsis" id="tts-voice">—</b></div>
+      <div class="readout"><span>THRESHOLD</span><b class="mono" id="threshold">—</b></div>
+    </div>
+  </aside>
+
+  <!-- ══ BOTTOM LEFT · CONVERSATION ═══════════════════════════════════ -->
+  <section class="panel panel-bl" style="--delay:.15s">
+    <div class="panel-head">
+      <h2>CONVERSATION</h2>
+      <span class="panel-id mono">03</span>
+    </div>
+    <div class="panel-body scroll" id="conversation">
+      <p class="empty">AWAITING FIRST EXCHANGE</p>
+    </div>
+  </section>
+
+  <!-- ══ BOTTOM CENTRE · VOICE VISUALISER ═════════════════════════════ -->
+  <section class="visualizer" style="--delay:.2s">
+    <canvas id="wave-canvas"></canvas>
+    <div class="viz-meta">
+      <span class="mic-flag" id="mic-flag"><i class="pulse-dot"></i><b id="mic-flag-text">MICROPHONE ACTIVE</b></span>
+      <span class="viz-state" id="viz-state">STANDBY</span>
+      <span class="mono micro dim" id="level-readout">LVL 0.00</span>
+    </div>
+    <form class="cmdline" id="cmdline" autocomplete="off">
+      <span class="prompt mono">&gt;</span>
+      <input id="cmd-input" type="text" spellcheck="false"
+             placeholder="TYPE A COMMAND · OR SPEAK" maxlength="400">
+      <button type="button" class="icon-btn" id="btn-mic" title="Toggle microphone (M)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.6" y="1.6" width="4.8" height="8.2" rx="2.4"/><path d="M3.4 7.6a4.6 4.6 0 0 0 9.2 0M8 12.2v2.4"/></svg>
+      </button>
+      <button type="button" class="icon-btn danger" id="btn-power" title="Shut down RON">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8v5.4M4.4 3.9a5 5 0 1 0 7.2 0"/></svg>
+      </button>
+    </form>
+  </section>
+
+  <!-- ══ BOTTOM RIGHT · ACTIVITY ══════════════════════════════════════ -->
+  <section class="panel panel-br" style="--delay:.25s">
+    <div class="panel-head">
+      <h2>ACTIVITY</h2>
+      <span class="panel-id mono">04</span>
+    </div>
+    <div class="panel-body scroll" id="activity">
+      <p class="empty">NO ACTIVITY LOGGED</p>
+    </div>
+  </section>
+
+</div>
+
+<!-- boot overlay -->
+<div id="boot">
+  <div class="boot-inner">
+    <div class="boot-mark"></div>
+    <div class="boot-log mono" id="boot-log"></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

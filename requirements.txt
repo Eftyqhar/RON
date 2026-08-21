@@ -1,6 +1,18 @@
 openai
 SpeechRecognition
-gtts
-pygame
-fpdf2
 pyaudio
+pywin32
+pywhatkit
+ddgs
+
+# PDF generation. fpdf2 is the maintained fork and renders inline **bold**
+# natively. The legacy `fpdf` 1.7.2 package also works -- tools.py detects it
+# and emulates bold via write() -- but its PDF metadata path is not
+# unicode-safe, so fpdf2 is preferred. Both install into the same `fpdf/`
+# directory, so if legacy fpdf is already present, remove it first:
+#     pip uninstall -y fpdf
+fpdf2>=2.7.6
+
+# HUD system monitor (ui_server.py). Optional: without it the interface runs
+# normally and the CPU/RAM/GPU/DISK readouts show N/A.
+psutil

@@ -1,5 +1,5 @@
 @echo off
-cd /d "C:\Project\assistant"
+cd /d "%~dp0"
 echo Starting Ron AI Assistant...
 python main.py
 pause

@@ -19,7 +19,7 @@
 
 **Ron** is a fully voice-controlled, JARVIS-style personal AI assistant that runs on your Windows desktop. Speak naturally — Ron listens, understands your intent, and either responds conversationally **or** executes a tool action (opening apps, visiting websites, playing YouTube videos, generating PDFs) without you touching the keyboard.
 
-It combines real-time speech recognition (Google Speech-to-Text), offline text-to-speech (Windows SAPI), and a function-calling LLM (`Qwen3.5-397B-A17B`) routed through an OpenAI-compatible endpoint.
+It combines real-time speech recognition (Google Speech-to-Text), offline text-to-speech (Windows SAPI), and a function-calling LLM (`kat-coder-pro-v2.5`) routed through an OpenAI-compatible endpoint.
 
 > *"Ron is online. How can I help you, Sir?"*
 
@@ -31,13 +31,13 @@ It combines real-time speech recognition (Google Speech-to-Text), offline text-t
 |---|---|
 | 🎙️ **Voice Input** | Hands-free speech recognition via microphone |
 | 🗣️ **Voice Output** | Natural offline TTS using Windows SAPI |
-| 🧠 **LLM Brain** | `Qwen3.5-397B-A17B` via OpenAI-compatible API |
+| 🧠 **LLM Brain** | `kat-coder-pro-v2.5` via OpenAI-compatible API |
 | 🛠️ **Function Calling** | AI emits JSON tool calls; assistant executes them |
 | 🎵 **Play YouTube** | *"Play Believer by Imagine Dragons"* → instant playback |
 | 🌐 **Open Websites** | Smart URL resolution via DuckDuckGo + known-site dictionary |
 | 📁 **Open Folders/Drives** | *"Open D drive"* or *"Open projects folder"* |
 | 🖥️ **Launch Apps** | Notepad, Chrome, VS Code, Spotify, WhatsApp, and more |
-| 📄 **Generate PDFs** | *"Create a PDF named notes with ..."* → saved to Documents |
+| 📄 **Generate PDFs** | *"Create a PDF about black holes"* → a formatted 3–5 page report in Documents |
 | 🔁 **Continuous Listening** | Always-on loop with smart shutdown phrases |
 | 🧩 **Modular Design** | Cleanly split into `main`, `voice`, and `tools` modules |
 
@@ -63,7 +63,7 @@ It combines real-time speech recognition (Google Speech-to-Text), offline text-t
         (Direct) │          │ (Conversational)
                  ▼          ▼
    ┌──────────────────┐   ┌──────────────────────┐
-   │   tools.py       │   │  LLM (Qwen3.5 via    │
+   │   tools.py       │   │  LLM (kat-coder via  │
    │ • play_youtube   │   │   hcnsec.cn API)     │
    │ • open_website   │   │  Returns JSON tool   │
    │ • open_app       │   │  call OR text reply  │
@@ -135,6 +135,13 @@ Double-click `run_ron.bat`
 **Option C — Voice activation on boot:**
 Place a shortcut to `run_ron.bat` in `shell:startup`.
 
+**Option D — Text mode (no microphone):**
+```bash
+python main.py "create a pdf about black holes"
+```
+Runs a single command through the full pipeline — useful for testing when no
+mic is attached.
+
 ---
 
 ## 🎤 Voice Commands
@@ -168,7 +175,19 @@ Ron understands natural language. Here are examples:
 |---|---|
 | *"Open D drive"* | Opens File Explorer at D:\ |
 | *"Open projects folder"* | Opens projects folder |
-| *"Create a PDF named notes with Hello world"* | Saves PDF to Documents |
+
+### 📄 Documents
+| Say This | What Happens |
+|---|---|
+| *"Create a PDF about black holes"* | Writes a formatted 3–5 page report, saves to Documents, opens it |
+| *"Make me a report on the French Revolution"* | Same, with a title, headings, and bullet points |
+| *"Create a PDF named notes with Hello world"* | Saves your exact dictated text |
+
+Document generation is a **two-stage** process: Ron's assistant turn returns just
+the topic, then a second dedicated writer turn produces the full 1200–2000 word
+Markdown body. That separation is deliberate — the assistant persona is told to
+stay terse, so asking it to inline a whole report into one JSON field produced
+empty PDFs.
 
 ### ⚙️ System
 | Say This | What Happens |
@@ -187,6 +206,7 @@ ron-ai-assistant/
 ├── requirements.txt     # 📦 Python dependencies
 ├── run_ron.bat          # 🪟 Windows launcher script
 ├── test_mic.py          # 🎤 Microphone discovery & test utility
+├── test_pdf.py          # 📄 Offline PDF renderer check (no mic/API needed)
 ├── test_api.py          # 🔌 API connectivity tester
 ├── test_anthropic.py    # 🔌 Anthropic models compatibility test
 ├── test_endpoint.py     # 🔌 Endpoint variant test
@@ -203,8 +223,9 @@ ron-ai-assistant/
 Edit `main.py`:
 
 ```python
-MODEL = "Qwen3.5-397B-A17B"   # Default
-# MODEL = "DeepSeek-V4-Flash" # Alternative (test with test_api.py)
+MODEL = "kat-coder-pro-v2.5"    # Default
+# MODEL = "DeepSeek-V4-Flash"   # Fallback (confirmed working on this endpoint)
+# MODEL = "Qwen3.5-397B-A17B"   # Fallback (test with test_api.py)
 ```
 
 ### Customizing the System Prompt
@@ -213,7 +234,7 @@ Edit `SYSTEM_PROMPT` in `main.py` to change Ron's personality, add new tools, or
 - Refer to itself as **Ron**
 - Address the user as **Sir** or **Ifteqhar**
 - Emit **JSON-only** responses when a tool action is required
-- Stay concise and never be verbose
+- Keep *spoken* replies short and sharp (document bodies are written by a separate writer prompt, so they are not affected)
 
 ### Adding New Tools
 
@@ -238,8 +259,9 @@ KNOWN_SITES = {
 
 | Model | Status | Notes |
 |---|---|---|
-| `Qwen3.5-397B-A17B` | ✅ Default | Best balance of speed and quality |
-| `DeepSeek-V4-Flash` | ✅ Works | Tested via `test_api.py` |
+| `kat-coder-pro-v2.5` | ⚠️ Unverified | Current default — not yet tested against this endpoint |
+| `DeepSeek-V4-Flash` | ✅ Works | Confirmed via `test_raw.py` (status 200) |
+| `Qwen3.5-397B-A17B` | ✅ Works | Good quality; slower on long documents |
 | `claude-3-5-sonnet` | ⚠️ Endpoint-dependent | Tested via `test_anthropic.py` |
 
 Run any test script to verify connectivity with your API key:
@@ -257,7 +279,7 @@ python test_api.py
 - **[PyAudio](https://people.csail.mit.edu/hubert/pyaudio/)** — Microphone stream
 - **[pywin32 (SAPI)](https://github.com/mhammond/pywin32)** — Native Windows TTS
 - **[pywhatkit](https://github.com/Ankit404butfound/PyWhatKit)** — YouTube playback
-- **[fpdf2](https://github.com/py-pdf/fpdf2)** — PDF generation
+- **[fpdf2](https://github.com/py-pdf/fpdf2)** — PDF generation (legacy `fpdf` 1.7.2 also supported)
 - **[duckduckgo_search](https://github.com/deedy5/duckduckgo_search)** — Fallback URL resolution
 
 ---
@@ -277,9 +299,17 @@ python test_api.py
 <details>
 <summary><b>🔑 API errors / quota issues</b></summary>
 
-- Verify your key at the [hcnsec.cn dashboard](https://hcnsec.cn).
-- Run `python test_api.py` to confirm connectivity and quota.
-- Ron will speak in Chinese if it detects quota errors: *"我的月度token配额已不足。"*
+Ron distinguishes two different failures, because they need different fixes:
+
+- **`[API Error: Invalid token ...]`** — your **API key is rejected** (expired,
+  revoked, or mistyped). Ron says *"My API key was rejected, Sir."* Paste a fresh
+  key at `main.py:18`. Note this has nothing to do with your token *allowance*,
+  despite the word "token" in the message.
+- **`quota` / `balance` / `insufficient`** — you are out of allowance. Ron says
+  *"我的月度token配额已不足。"* Top up at the [hcnsec.cn dashboard](https://hcnsec.cn).
+
+Run `python test_api.py` to check the key and endpoint independently. The PDF
+renderer needs no key at all — `python test_pdf.py` verifies it offline.
 
 </details>
 
@@ -288,6 +318,25 @@ python test_api.py
 
 - Confirm Windows SAPI voices are installed (`Settings → Time & Language → Language → Speech`).
 - The fallback in `voice.py` prints text to console if TTS fails.
+
+</details>
+
+<details>
+<summary><b>📄 PDF comes out blank, 0 bytes, or has no bold text</b></summary>
+
+Run `python test_pdf.py` — it prints which PDF library is installed and renders
+a sample report without needing a mic or API key.
+
+- **Blank single page:** the model returned a placeholder instead of a body.
+  Ron now refuses to save these, so you get a spoken error instead of an empty
+  file. Check that `SYSTEM_PROMPT` still sends `topic` (not `content`).
+- **No inline bold:** you have legacy `fpdf` 1.7.2, which has no
+  `multi_cell(markdown=True)`. Ron emulates bold via `write()`, but for native
+  rendering: `pip uninstall -y fpdf` then `pip install "fpdf2>=2.7.6"`.
+  (Uninstall first — both packages install into the same `fpdf/` directory.)
+- **0-byte file:** legacy `fpdf` writes PDF metadata without UTF-16 encoding
+  and truncates the file before encoding the buffer, so a non-ASCII title
+  killed the output. `tools.py` now sanitizes metadata on legacy fpdf.
 
 </details>
 
@@ -342,7 +391,7 @@ Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for more informa
 ## 🙏 Acknowledgments
 
 - Inspired by **J.A.R.V.I.S.** from the *Iron Man* universe
-- Powered by [Qwen3.5](https://qwenlm.github.io/) and the OpenAI-compatible API ecosystem
+- Powered by an OpenAI-compatible LLM endpoint (currently `kat-coder-pro-v2.5`)
 - Speech recognition by [Google Cloud Speech](https://cloud.google.com/speech-to-text)
 
 ---
