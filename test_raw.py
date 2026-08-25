@@ -6,7 +6,7 @@ import sys
 if sys.platform == 'win32':
     sys.stdout = open(1, 'w', encoding='utf-8', errors='replace', closefd=False)
 
-API_KEY = "YOUR_API_KEY"
+API_KEY = "sk-OvM5F5O5UCBcPG3GH1IPMkroygV1wSFddSDCyN2oIqU0mXjT"
 BASE_URL = "https://api.hcnsec.cn"
 
 print("Testing /v1/chat/completions with DeepSeek-V4-Flash")

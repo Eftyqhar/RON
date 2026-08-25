@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+
+# Local chat history -- holds every exchange with RON, including anything you
+# said in front of the microphone. Keep it off GitHub.
+history.db
+history.db-wal
+history.db-shm
+
+# Dev artefacts
+sse_capture.txt
+test_output.txt
+verify_*.txt
+ui_render_*.png
