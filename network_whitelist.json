@@ -1,0 +1,25 @@
+{
+  "trusted_macs": {
+    "aa:bb:cc:dd:ee:ff": {
+      "name": "Test IoT Device",
+      "added_at": "2026-09-11 11:20:02"
+    },
+    "92:c8:06:4e:23:f3": {
+      "name": "Generic Hardware",
+      "added_at": "2026-09-11 12:22:53"
+    },
+    "fe:2f:7b:36:b1:52": {
+      "name": "Generic Hardware",
+      "added_at": "2026-09-11 12:24:06"
+    },
+    "80:ce:b9:19:4f:d8": {
+      "name": "Generic Hardware",
+      "added_at": "2026-09-11 12:28:18"
+    },
+    "80:f3:da:63:11:bc": {
+      "name": "Generic Hardware",
+      "added_at": "2026-09-11 19:46:14"
+    }
+  },
+  "scan_history": []
+}

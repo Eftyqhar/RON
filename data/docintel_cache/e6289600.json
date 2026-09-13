@@ -1,0 +1,34 @@
+{
+  "id": "e6289600",
+  "filename": "RON_Financial_Agreement_Q3.pdf",
+  "ext": "pdf",
+  "pages": 2,
+  "words": 0,
+  "text": "--- PAGE 1 ---\\nRON ENTERPRISES · QUARTERLY FINANCIAL & SERVICE AGREEMENT\nSection 1: Executive Overview\nThis agreement covers enterprise hardware support and cloud services for Q3 2026.\nSection 4: Hardware & Service Warranty Terms\nThe equipment is covered under a 3-year limited hardware replacement warranty with next-business-day on-site response. A\\n\\n--- PAGE 2 ---\\nSection 5: Itemized Operating Expenses\nCategory | Vendor | Cost\nServer Hosting | AWS Cloud | $1,250.00\nOffice Broadband | Starlink | $250.00\nSoftware Licenses | JetBrains & Tools | $500.00\nConsulting Services | Cyber Sec Ops | $2,000.00",
+  "page_texts": [
+    {
+      "page": 1,
+      "text": "RON ENTERPRISES · QUARTERLY FINANCIAL & SERVICE AGREEMENT\nSection 1: Executive Overview\nThis agreement covers enterprise hardware support and cloud services for Q3 2026.\nSection 4: Hardware & Service Warranty Terms\nThe equipment is covered under a 3-year limited hardware replacement warranty with next-business-day on-site response. A"
+    },
+    {
+      "page": 2,
+      "text": "Section 5: Itemized Operating Expenses\nCategory | Vendor | Cost\nServer Hosting | AWS Cloud | $1,250.00\nOffice Broadband | Starlink | $250.00\nSoftware Licenses | JetBrains & Tools | $500.00\nConsulting Services | Cyber Sec Ops | $2,000.00"
+    }
+  ],
+  "tables": [],
+  "table_count": 0,
+  "metadata": {
+    "filename": "RON_Financial_Agreement_Q3.pdf",
+    "ext": "pdf",
+    "size_bytes": 2213,
+    "title": "",
+    "author": "",
+    "subject": "",
+    "creator": "",
+    "producer": ""
+  },
+  "numerical_summary": {},
+  "created_at": "2026-09-11 14:20:40",
+  "digest": null,
+  "qa_history": []
+}

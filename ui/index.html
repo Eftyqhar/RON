@@ -1,0 +1,2106 @@
+<!DOCTYPE html>
+<html lang="en" data-state="idle" data-link="down">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R.O.N. — AI Voice Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=Rajdhani:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Weather glyph sprite. Inline so the HUD needs no external assets and no
+     network: `#wx-icon-use` is pointed at one of these by app.js. Stroked, not
+     filled, to sit with the rest of the interface's line work. -->
+<svg id="wx-sprite" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">
+  <defs>
+    <path id="wx-cloud-path" d="M8.5 23h14a4.5 4.5 0 0 0 .4-9 6.5 6.5 0 0 0-12.5-1.6A4.7 4.7 0 0 0 8.5 23z"/>
+    <g id="wx-drops"><path d="M12 26.5l-1.2 3M17 26.5l-1.2 3M22 26.5l-1.2 3"/></g>
+    <g id="wx-flakes"><path d="M11.6 28h2M12.6 27v2M17.6 28h2M18.6 27v2M23.6 28h2M24.6 27v2"/></g>
+  </defs>
+
+  <symbol id="wx-clear" viewBox="0 0 32 32">
+    <circle cx="16" cy="16" r="6.2"/>
+    <path d="M16 3v3.4M16 25.6V29M3 16h3.4M25.6 16H29M6.8 6.8l2.4 2.4M22.8 22.8l2.4 2.4M25.2 6.8l-2.4 2.4M9.2 22.8l-2.4 2.4"/>
+  </symbol>
+
+  <symbol id="wx-clear-night" viewBox="0 0 32 32">
+    <path d="M21.8 20.6A9 9 0 0 1 12.4 7.4a9.4 9.4 0 1 0 11.9 12 9 9 0 0 1-2.5 1.2z"/>
+    <path d="M24 6.4v2.6M22.7 7.7h2.6"/>
+  </symbol>
+
+  <symbol id="wx-partly" viewBox="0 0 32 32">
+    <circle cx="11.5" cy="11" r="4.4"/>
+    <path d="M11.5 2.6v2.2M3.1 11h2.2M5.6 5.1l1.5 1.5M17.4 5.1l-1.5 1.5"/>
+    <use href="#wx-cloud-path"/>
+  </symbol>
+
+  <symbol id="wx-cloud" viewBox="0 0 32 32">
+    <use href="#wx-cloud-path"/>
+    <path d="M6 26.5h12" opacity=".45"/>
+  </symbol>
+
+  <symbol id="wx-fog" viewBox="0 0 32 32">
+    <use href="#wx-cloud-path"/>
+    <path d="M6 26.5h15M8.5 29.5h13"/>
+  </symbol>
+
+  <symbol id="wx-drizzle" viewBox="0 0 32 32">
+    <use href="#wx-cloud-path"/>
+    <path d="M12.4 26.8v1.8M17.4 26.8v1.8M22.4 26.8v1.8"/>
+  </symbol>
+
+  <symbol id="wx-rain" viewBox="0 0 32 32">
+    <use href="#wx-cloud-path"/>
+    <use href="#wx-drops"/>
+  </symbol>
+
+  <symbol id="wx-snow" viewBox="0 0 32 32">
+    <use href="#wx-cloud-path"/>
+    <use href="#wx-flakes"/>
+  </symbol>
+
+  <symbol id="wx-storm" viewBox="0 0 32 32">
+    <use href="#wx-cloud-path"/>
+    <path d="M17.6 25.4l-4 0 2.6 2.6-3.4 0"/>
+    <path d="M21.6 26.2l-1.2 3"/>
+  </symbol>
+</svg>
+
+<!-- Ambient layers: canvas particles, grid, radial core glow, scan sweep -->
+<canvas id="bg-canvas" aria-hidden="true"></canvas>
+<div class="layer grid-layer" aria-hidden="true"></div>
+<div class="layer core-glow" aria-hidden="true"></div>
+<div class="layer scan-sweep" aria-hidden="true"></div>
+<div class="layer vignette" aria-hidden="true"></div>
+
+<div id="stage">
+
+  <!-- ══ TOP BAR ══════════════════════════════════════════════════════ -->
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true">
+        <circle cx="24" cy="24" r="21" class="bm-ring"/>
+        <circle cx="24" cy="24" r="15" class="bm-ring bm-dash"/>
+        <circle cx="24" cy="24" r="5.5" class="bm-core"/>
+        <path d="M24 3 v6 M24 39 v6 M3 24 h6 M39 24 h6" class="bm-tick"/>
+      </svg>
+      <div class="brand-text">
+        <h1>R.O.N.</h1>
+        <p>AI VOICE ASSISTANT</p>
+      </div>
+    </div>
+
+    <div class="sysline">
+      <span class="pulse-dot"></span>
+      <span id="system-status">SYSTEM ONLINE</span>
+      <span class="hair"></span>
+      <span class="mono micro dim" id="model-name">MODEL —</span>
+      <span class="hair"></span>
+      <span class="mono micro" id="lang-badge">LANG: EN</span>
+    </div>
+
+    <div class="status-cluster">
+      <div class="chip" id="chip-net" data-ok="unknown">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 6.5A9.5 9.5 0 0 1 15 6.5M3.5 9.5A6 6 0 0 1 12.5 9.5M6 12.4A2.7 2.7 0 0 1 10 12.4"/><circle cx="8" cy="14.6" r="1"/></svg>
+        <span>NET</span>
+      </div>
+      <div class="chip" id="chip-mic" data-ok="unknown" role="button" tabindex="0" title="Toggle microphone (M)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.6" y="1.6" width="4.8" height="8.2" rx="2.4"/><path d="M3.4 7.6a4.6 4.6 0 0 0 9.2 0M8 12.2v2.4"/></svg>
+        <span id="chip-mic-label">MIC</span>
+      </div>
+      <div class="chip" id="chip-mem" data-ok="ok" role="button" tabindex="0" title="Open Neural Memory Matrix (Ctrl+M)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.5"/><circle cx="3" cy="5" r="1.3"/><circle cx="13" cy="5" r="1.3"/><circle cx="4" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><path d="M8 5.5V3M6 7L4 5.8M10 7L12 5.8M6.5 9.5L4.5 11M9.5 9.5L11.5 11" stroke-width="1.2"/></svg>
+        <span id="chip-mem-label">MEM</span>
+      </div>
+      <div class="chip" id="chip-coach" data-ok="true" role="button" tabindex="0" title="Open Executive Standup & Focus HUD (Ctrl+Shift+F)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/></svg>
+        <span id="chip-coach-label">FOCUS</span>
+      </div>
+      <div class="chip" id="chip-intel" data-ok="true" role="button" tabindex="0" title="Open Live Intel Briefing Radio / World Report (Ctrl+Shift+I)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.5"/><path d="M4.5 4.5a5 5 0 0 0 0 7M11.5 4.5a5 5 0 0 1 0 7M2.5 2.5a8 8 0 0 0 0 11M13.5 2.5a8 8 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+        <span id="chip-intel-label">INTEL</span>
+      </div>
+      <div class="chip" id="chip-tg" data-ok="unknown" role="button" tabindex="0" title="Telegram Pocket Uplink Status">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M14.5 2.2L1.8 7.3c-.9.4-.9 1.4 0 1.7l3.3 1.1 1.3 3.9c.2.6.9.8 1.4.3l2-1.9 3.5 2.6c.7.5 1.7.1 1.9-.8l2.2-11.2c.2-.9-.6-1.6-1.5-1.3L14.5 2.2zM6.6 9.6l6.2-4.8-5 5.5v2.4l-1.2-3.1z"/></svg>
+        <span id="chip-tg-label">UPLINK</span>
+      </div>
+      <div class="chip" id="chip-radar" data-ok="true" role="button" tabindex="0" title="Open Cyber Watchdog Network Radar (Ctrl+Shift+N)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="4.5" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="2 2"/><circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="1"/><line x1="8" y1="8" x2="13.5" y2="3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        <span id="chip-radar-label">RADAR</span>
+      </div>
+      <div class="chip" id="chip-doc" data-ok="true" role="button" tabindex="0" title="Open Smart PDF & Document Intelligence Engine (Ctrl+Shift+D)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 1.5A1.5 1.5 0 0 0 2.5 3v10A1.5 1.5 0 0 0 4 14.5h8a1.5 1.5 0 0 0 1.5-1.5V6L9 1.5H4z" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M8.5 1.5V6H13M5 8.5h6M5 11h4" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+        <span id="chip-doc-label">DOC INTEL</span>
+      </div>
+      <div class="chip" id="chip-sys" data-ok="unknown">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.2" y="2.2" width="11.6" height="11.6" rx="1.6"/><rect x="6" y="6" width="4" height="4" rx="0.6"/></svg>
+        <span id="chip-sys-label">CORE</span>
+      </div>
+      <div class="clock">
+        <b class="mono" id="clock">--:--:--</b>
+        <span class="micro dim" id="date">— — —</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ══ LEFT · SYSTEM MONITOR + WEATHER ══════════════════════════════ -->
+  <div class="col col-left">
+  <aside class="panel panel-left" style="--delay:.05s">
+    <div class="panel-head">
+      <h2>SYSTEM MONITOR</h2>
+      <span class="panel-id mono">01</span>
+    </div>
+    <div class="panel-body">
+      <div class="meter" id="meter-cpu">
+        <div class="meter-top"><span>CPU</span><b class="mono">--<i>%</i></b></div>
+        <div class="track"><div class="fill"></div></div>
+      </div>
+      <div class="meter" id="meter-ram">
+        <div class="meter-top"><span>RAM</span><b class="mono">--<i>%</i></b></div>
+        <div class="track"><div class="fill"></div></div>
+      </div>
+      <div class="meter" id="meter-gpu">
+        <div class="meter-top"><span>GPU</span><b class="mono">--<i>%</i></b></div>
+        <div class="track"><div class="fill"></div></div>
+      </div>
+      <div class="meter" id="meter-disk">
+        <div class="meter-top"><span>DISK</span><b class="mono">--<i>%</i></b></div>
+        <div class="track"><div class="fill"></div></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="readout">
+        <span>NETWORK</span>
+        <b id="net-state" class="accent">CHECKING</b>
+      </div>
+      <div class="readout sub">
+        <span class="mono micro">▼ <i id="net-down">0.0</i> KB/S</span>
+        <span class="mono micro">▲ <i id="net-up">0.0</i> KB/S</span>
+      </div>
+      <div class="readout">
+        <span>UPTIME</span>
+        <b class="mono" id="uptime">00:00:00</b>
+      </div>
+      <div class="readout">
+        <span>HOST</span>
+        <b class="mono" id="host">—</b>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ══ LEFT LOWER · WEATHER ═════════════════════════════════════════ -->
+  <aside class="panel panel-weather" id="panel-weather" data-ok="unknown"
+         data-stale="false" style="--delay:.12s;cursor:pointer;" title="Click to open Holographic Weather Station (Ctrl+Shift+W)">
+    <div class="panel-head">
+      <h2>WEATHER</h2>
+      <span class="panel-id mono">05</span>
+    </div>
+    <div class="panel-body">
+      <div class="wx-now">
+        <svg class="wx-icon" id="wx-icon" viewBox="0 0 32 32" aria-hidden="true">
+          <use id="wx-icon-use" href="#wx-cloud"/>
+        </svg>
+        <div class="wx-read">
+          <b class="wx-temp mono" id="wx-temp">--°</b>
+          <span class="wx-cond" id="wx-cond">STANDBY</span>
+        </div>
+      </div>
+      <p class="wx-place mono micro dim" id="wx-place">—</p>
+
+      <div class="divider"></div>
+
+      <div class="readout"><span>HUMIDITY</span><b class="mono" id="wx-humidity">—</b></div>
+      <div class="readout"><span>WIND</span><b class="mono" id="wx-wind">—</b></div>
+      <div class="readout wx-optional"><span>RAIN TODAY</span><b class="mono" id="wx-rain">—</b></div>
+
+      <div class="divider wx-optional" id="wx-strip-rule"></div>
+
+      <div class="wx-strip wx-optional" id="wx-strip"></div>
+    </div>
+  </aside>
+  </div>
+
+  <!-- ══ CENTRE · AI CORE ═════════════════════════════════════════════ -->
+  <main class="core-stage">
+    <div class="core" id="core">
+      <svg class="core-svg" viewBox="0 0 500 500" aria-hidden="true">
+        <defs>
+          <radialGradient id="g-core" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"   stop-color="var(--accent-bright)" stop-opacity=".92"/>
+            <stop offset="38%"  stop-color="var(--accent)"        stop-opacity=".30"/>
+            <stop offset="72%"  stop-color="var(--accent)"        stop-opacity=".07"/>
+            <stop offset="100%" stop-color="var(--accent)"        stop-opacity="0"/>
+          </radialGradient>
+          <radialGradient id="g-disc" cx="50%" cy="42%" r="62%">
+            <stop offset="0%"   stop-color="var(--accent)" stop-opacity=".13"/>
+            <stop offset="100%" stop-color="#02060A"       stop-opacity=".55"/>
+          </radialGradient>
+          <linearGradient id="g-sweep" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%"   stop-color="var(--accent)" stop-opacity="0"/>
+            <stop offset="100%" stop-color="var(--accent)" stop-opacity=".85"/>
+          </linearGradient>
+        </defs>
+
+        <!-- fine HUD tick collar -->
+        <circle class="ring ticks-fine spin-cw" r="240" cx="250" cy="250"/>
+        <circle class="ring ticks-major spin-cw" r="240" cx="250" cy="250"/>
+
+        <!-- hairline boundary -->
+        <circle class="ring hairline" r="226" cx="250" cy="250"/>
+
+        <!-- segmented technical ring -->
+        <circle class="ring segments spin-ccw" r="212" cx="250" cy="250"/>
+
+        <!-- rotating brackets -->
+        <g class="spin-cw slow">
+          <path class="bracket" d="M250 56 a194 194 0 0 1 137.2 56.8"/>
+          <path class="bracket" d="M250 444 a194 194 0 0 1 -137.2 -56.8"/>
+        </g>
+        <g class="spin-ccw">
+          <path class="bracket thin" d="M62 250 a188 188 0 0 1 40 -116"/>
+          <path class="bracket thin" d="M438 250 a188 188 0 0 1 -40 116"/>
+        </g>
+
+        <!-- dashed ring -->
+        <circle class="ring dashed spin-cw" r="176" cx="250" cy="250"/>
+
+        <!-- reactive radial waveform (bars injected by app.js) -->
+        <g id="radial-bars" class="radial-bars"></g>
+
+        <!-- scan / progress arc -->
+        <circle class="ring scan-arc" r="150" cx="250" cy="250" stroke="url(#g-sweep)"/>
+        <circle class="ring progress-arc" r="150" cx="250" cy="250"/>
+
+        <!-- amplitude-reactive ring -->
+        <circle class="ring reactive" id="reactive-ring" r="128" cx="250" cy="250"/>
+
+        <!-- inner glass disc + glow -->
+        <circle class="disc" r="112" cx="250" cy="250" fill="url(#g-disc)"/>
+        <circle class="disc-edge" r="112" cx="250" cy="250"/>
+        <circle class="glow-core" id="glow-core" r="96" cx="250" cy="250" fill="url(#g-core)"/>
+
+        <!-- orbiting indicators -->
+        <g class="orbit orbit-1"><circle class="orb" cx="250" cy="54" r="3.6"/></g>
+        <g class="orbit orbit-2"><circle class="orb sm" cx="250" cy="88" r="2.4"/></g>
+        <g class="orbit orbit-3"><circle class="orb sm" cx="250" cy="72" r="2"/><circle class="orb sm" cx="250" cy="428" r="2"/></g>
+
+        <!-- cardinal markings -->
+        <g class="cardinals">
+          <text x="250" y="24" text-anchor="middle">000</text>
+          <text x="484" y="254" text-anchor="end">090</text>
+          <text x="250" y="490" text-anchor="middle">180</text>
+          <text x="16"  y="254">270</text>
+        </g>
+      </svg>
+
+      <div class="core-center">
+        <div class="core-label">RON</div>
+        <div class="core-state" id="core-state">STANDBY</div>
+        <div class="core-detail mono" id="core-detail">ALL SYSTEMS NOMINAL</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ══ RIGHT · ACTIVE MODULES ═══════════════════════════════════════ -->
+  <aside class="panel panel-right" style="--delay:.1s">
+    <div class="panel-head">
+      <h2>ACTIVE MODULES</h2>
+      <span class="panel-id mono">02</span>
+    </div>
+    <div class="panel-body">
+      <ul class="modules" id="modules">
+        <li data-key="voice"   data-ok="unknown"><i class="led"></i><span>VOICE ENGINE</span><b class="mono">—</b></li>
+        <li data-key="core"    data-ok="unknown"><i class="led"></i><span>AI CORE</span><b class="mono">—</b></li>
+        <li data-key="tools"   data-ok="unknown"><i class="led"></i><span>TOOL ENGINE</span><b class="mono">—</b></li>
+        <li data-key="audio"   data-ok="unknown"><i class="led"></i><span>AUDIO SYSTEM</span><b class="mono">—</b></li>
+        <li data-key="network" data-ok="unknown"><i class="led"></i><span>NETWORK</span><b class="mono">—</b></li>
+        <li data-key="weather" data-ok="unknown"><i class="led"></i><span>WEATHER FEED</span><b class="mono">—</b></li>
+      </ul>
+
+      <div class="divider"></div>
+
+      <div class="readout"><span>INPUT</span><b class="mono ellipsis" id="mic-device">—</b></div>
+      <div class="readout"><span>SYNTH</span><b class="mono ellipsis" id="tts-voice">—</b></div>
+      <div class="readout"><span>THRESHOLD</span><b class="mono" id="threshold">—</b></div>
+    </div>
+  </aside>
+
+  <!-- ══ BOTTOM LEFT · CONVERSATION ═══════════════════════════════════ -->
+  <section class="panel panel-bl" style="--delay:.15s">
+    <div class="panel-head">
+      <h2>CONVERSATION</h2>
+      <span class="panel-id mono">03</span>
+    </div>
+    <div class="panel-body scroll" id="conversation">
+      <p class="empty">AWAITING FIRST EXCHANGE</p>
+    </div>
+  </section>
+
+  <!-- ══ BOTTOM CENTRE · VOICE VISUALISER ═════════════════════════════ -->
+  <section class="visualizer" style="--delay:.2s">
+    <canvas id="wave-canvas"></canvas>
+    <div class="viz-meta">
+      <span class="mic-flag" id="mic-flag"><i class="pulse-dot"></i><b id="mic-flag-text">MICROPHONE ACTIVE</b></span>
+      <span class="viz-state" id="viz-state">STANDBY</span>
+      <span class="mono micro dim" id="level-readout">LVL 0.00</span>
+    </div>
+    <form class="cmdline" id="cmdline" autocomplete="off">
+      <span class="prompt mono">&gt;</span>
+      <input id="cmd-input" type="text" spellcheck="false"
+             placeholder="TYPE A COMMAND · OR SPEAK" maxlength="400">
+      <button type="button" class="icon-btn" id="btn-mic" title="Toggle microphone (M)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.6" y="1.6" width="4.8" height="8.2" rx="2.4"/><path d="M3.4 7.6a4.6 4.6 0 0 0 9.2 0M8 12.2v2.4"/></svg>
+      </button>
+      <button type="button" class="icon-btn danger" id="btn-power" title="Shut down RON">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8v5.4M4.4 3.9a5 5 0 1 0 7.2 0"/></svg>
+      </button>
+    </form>
+
+    <!-- ══ LIVE INTEL TICKER-TAPE BAR ══════════════════════════════════ -->
+    <div class="intel-ticker-wrap" id="intel-ticker-wrap" title="Click to open RON World Report (Ctrl+Shift+I)">
+      <div class="ticker-badge mono micro"><span>●</span> LIVE INTEL</div>
+      <div class="ticker-marquee">
+        <div class="ticker-content mono micro" id="intel-ticker-text">
+          STANDBY · HARVESTING REAL-TIME GLOBAL INTEL FEEDS (CRYPTO · TECH · HN · GITHUB)
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ BOTTOM RIGHT · ACTIVITY ══════════════════════════════════════ -->
+  <section class="panel panel-br" style="--delay:.25s">
+    <div class="panel-head">
+      <h2>ACTIVITY</h2>
+      <span class="panel-id mono">04</span>
+    </div>
+    <div class="panel-body scroll" id="activity">
+      <p class="empty">NO ACTIVITY LOGGED</p>
+    </div>
+  </section>
+
+</div>
+
+<!-- boot overlay -->
+<div id="boot">
+  <div class="boot-inner">
+    <div class="boot-mark"></div>
+    <div class="boot-log mono" id="boot-log"></div>
+  </div>
+</div>
+
+<!-- ══ SEARCH OVERLAY · panel 06 ════════════════════════════════════════
+     A cinematic, full-screen disk-scan console. Hidden by default and pinned
+     with position:fixed, so it lives outside the responsive grid entirely and
+     can never push the layout into overflow (test_ui_render checks for that).
+     Driven by bus.search() over SSE -> applySearch() in app.js. -->
+<div id="search-overlay" aria-hidden="true" data-status="idle">
+  <div class="so-scan" aria-hidden="true"></div>
+  <div class="so-grid" aria-hidden="true"></div>
+  <canvas id="so-canvas" aria-hidden="true"></canvas>
+
+  <div class="so-console">
+    <div class="so-head">
+      <div class="so-title">
+        <svg viewBox="0 0 24 24" class="so-glyph" aria-hidden="true">
+          <circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 L21 21"/>
+        </svg>
+        <div>
+          <h2>DISK SEARCH</h2>
+          <p class="mono micro dim" id="so-sub">STANDBY</p>
+        </div>
+      </div>
+      <button type="button" class="so-close" id="so-close" title="Close (Esc)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13"/></svg>
+      </button>
+    </div>
+
+    <div class="so-query">
+      <span class="prompt mono">&gt;</span>
+      <b class="mono" id="so-query">—</b>
+      <span class="so-mode mono micro" id="so-mode">KEYWORD</span>
+    </div>
+
+    <div class="so-stats">
+      <div class="so-stat"><b class="mono" id="so-scanned">0</b><span>SCANNED</span></div>
+      <div class="so-stat"><b class="mono accent" id="so-matches">0</b><span>MATCHES</span></div>
+      <div class="so-stat"><b class="mono" id="so-elapsed">0.0s</b><span>ELAPSED</span></div>
+    </div>
+
+    <p class="so-current mono micro" id="so-current">&nbsp;</p>
+
+    <div class="so-results" id="so-results">
+      <p class="empty">AWAITING SCAN</p>
+    </div>
+
+    <p class="so-foot mono micro dim" id="so-foot">
+      ENTER A SEARCH · "FIND MY PYTHON PROJECTS"
+    </p>
+  </div>
+</div>
+
+<!-- ═══ NETWORK SPEED OVERLAY · panel 07 ═══════════════════════════════
+     A cinematic, full-screen speed-test console. Hidden by default and pinned
+     with position:fixed, so it lives outside the responsive grid entirely and
+     can never push the layout into overflow. Driven by bus.netspeed() over SSE
+     -> applySpeed() in app.js. -->
+<div id="speed-overlay" aria-hidden="true" data-status="idle">
+  <div class="so-scan" aria-hidden="true"></div>
+  <div class="so-grid" aria-hidden="true"></div>
+  <canvas id="ns-canvas" aria-hidden="true"></canvas>
+
+  <div class="so-console">
+    <div class="so-head">
+      <div class="so-title">
+        <svg viewBox="0 0 24 24" class="so-glyph" aria-hidden="true">
+          <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+          <circle cx="12" cy="12" r="5.5"/>
+        </svg>
+        <div>
+          <h2>INTERNET SPEED</h2>
+          <p class="mono micro dim" id="ns-sub">STANDBY</p>
+        </div>
+      </div>
+      <button type="button" class="so-close" id="ns-close" title="Close (Esc)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13"/></svg>
+      </button>
+    </div>
+
+    <!-- ══ Stark Arc Tachometer ══ -->
+    <div class="ns-meter-stage">
+      <canvas id="ns-meter-canvas" width="520" height="310"></canvas>
+      <div class="ns-meter-readout">
+        <div class="ns-meter-tag mono micro" id="ns-meter-tag">STANDBY</div>
+        <div class="ns-meter-num mono" id="ns-meter-num">0.0</div>
+        <div class="ns-meter-unit mono micro" id="ns-meter-unit">MBPS</div>
+        <div class="ns-meter-live-phase mono micro dim" id="ns-meter-live-phase">INITIALIZING SENSORS</div>
+      </div>
+    </div>
+
+    <div class="ns-phase">
+      <span class="mono micro dim">PHASE</span>
+      <b class="mono" id="ns-phase">—</b>
+      <div class="ns-bar"><div class="ns-bar-fill" id="ns-bar-fill"></div></div>
+      <span class="mono micro dim" id="ns-phase-pct">0%</span>
+    </div>
+
+    <div class="so-stats">
+      <div class="so-stat"><b class="mono" id="ns-ping">—</b><span>PING ms</span></div>
+      <div class="so-stat"><b class="mono accent" id="ns-down">—</b><span>DOWN Mbps</span></div>
+      <div class="so-stat"><b class="mono" id="ns-up">—</b><span>UP Mbps</span></div>
+    </div>
+
+    <div class="so-stats" style="justify-content:center; display:flex; gap:10px;">
+      <div class="so-stat" style="min-width:110px;"><b class="mono accent" id="ns-elapsed">0.0s</b><span>ELAPSED</span></div>
+    </div>
+
+    <p class="so-foot mono micro dim" id="ns-foot">
+      SAY "CHECK MY INTERNET SPEED" · ESC TO CLOSE
+    </p>
+  </div>
+</div>
+
+<!-- ═══ TIMER OVERLAY · panel 08 ═════════════════════════════════════════
+     A cinematic, full-screen countdown console. Hidden by default and pinned
+     with position:fixed, so it lives outside the responsive grid entirely and
+     can never push the layout into overflow. Driven by bus.timer() over SSE
+     -> applyTimer() in app.js. -->
+<div id="timer-overlay" aria-hidden="true" data-status="idle">
+  <div class="so-scan" aria-hidden="true"></div>
+  <div class="so-grid" aria-hidden="true"></div>
+  <canvas id="tm-canvas" aria-hidden="true"></canvas>
+
+  <div class="so-console tm-console">
+    <!-- Sci-fi Corner Brackets -->
+    <span class="tm-corner tm-corner-tl" aria-hidden="true"></span>
+    <span class="tm-corner tm-corner-tr" aria-hidden="true"></span>
+    <span class="tm-corner tm-corner-bl" aria-hidden="true"></span>
+    <span class="tm-corner tm-corner-br" aria-hidden="true"></span>
+
+    <div class="so-head tm-head">
+      <div class="so-title">
+        <div class="tm-glyph-wrap">
+          <svg viewBox="0 0 24 24" class="so-glyph tm-glyph" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M12 7v5l3 2"/>
+            <circle cx="12" cy="12" r="2" fill="currentColor"/>
+          </svg>
+          <div class="tm-glyph-pulse" aria-hidden="true"></div>
+        </div>
+        <div>
+          <div class="tm-title-row">
+            <h2>QUANTUM CHRONOMETER</h2>
+            <span class="tm-live-pill mono micro" id="tm-sub">STANDBY</span>
+          </div>
+          <p class="mono micro dim tm-subtitle">TACTICAL COUNTDOWN &amp; PRECISION TEMPORAL ENGINE</p>
+        </div>
+      </div>
+      <button type="button" class="so-close" id="tm-close" title="Close (Esc)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13"/></svg>
+      </button>
+    </div>
+
+    <div class="tm-body">
+      <!-- ═══ HOLOGRAPHIC CHRONO DIAL STAGE ═══ -->
+      <div class="tm-stage">
+        <!-- Ambient radial glow behind the dial -->
+        <div class="tm-dial-glow" aria-hidden="true"></div>
+
+        <!-- SVG Arc Reactor Chronometer Dial -->
+        <svg class="tm-dial-svg" viewBox="0 0 340 340" aria-hidden="true">
+          <defs>
+            <linearGradient id="tm-gradient-cyan" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#38E1F0"/>
+              <stop offset="60%" stop-color="#8EF5FF"/>
+              <stop offset="100%" stop-color="#C4F8FF"/>
+            </linearGradient>
+            <linearGradient id="tm-gradient-warn" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#FF9F1C"/>
+              <stop offset="100%" stop-color="#FF4A5E"/>
+            </linearGradient>
+            <linearGradient id="tm-gradient-done" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#00FF9D"/>
+              <stop offset="100%" stop-color="#2ecc71"/>
+            </linearGradient>
+          </defs>
+
+          <!-- Outer rotating graduation bezel ring -->
+          <g class="tm-bezel-group">
+            <circle cx="170" cy="170" r="158" class="tm-bezel-outer" />
+            <circle cx="170" cy="170" r="150" class="tm-bezel-inner" />
+          </g>
+
+          <!-- Cardinal markings -->
+          <text x="170" y="24" class="tm-cardinal-text" text-anchor="middle">00</text>
+          <text x="318" y="174" class="tm-cardinal-text" text-anchor="middle">15</text>
+          <text x="170" y="324" class="tm-cardinal-text" text-anchor="middle">30</text>
+          <text x="22" y="174" class="tm-cardinal-text" text-anchor="middle">45</text>
+
+          <!-- Reticle crosshairs -->
+          <line x1="170" y1="52" x2="170" y2="68" class="tm-reticle-line"/>
+          <line x1="170" y1="272" x2="170" y2="288" class="tm-reticle-line"/>
+          <line x1="52" y1="170" x2="68" y2="170" class="tm-reticle-line"/>
+          <line x1="272" y1="170" x2="288" y2="170" class="tm-reticle-line"/>
+
+          <!-- Faint radar concentric guides -->
+          <circle cx="170" cy="170" r="102" class="tm-guide-ring" />
+          <circle cx="170" cy="170" r="76" class="tm-guide-ring-faint" />
+
+          <!-- Main Arc Progress Rings (r = 126, circumference = 2 * PI * 126 ≈ 791.68) -->
+          <circle cx="170" cy="170" r="126" class="tm-arc-track" />
+          <circle id="tm-arc-fill" cx="170" cy="170" r="126" class="tm-arc-fill" />
+        </svg>
+
+        <!-- Chronometer Core Readout (Overlayed inside the dial center) -->
+        <div class="tm-dial-core">
+          <div class="tm-core-state mono micro">
+            <span class="tm-beacon-dot"></span>
+            <span id="tm-phase-text">COUNTDOWN</span>
+          </div>
+
+          <div class="tm-digits-wrap">
+            <b class="mono tm-remaining" id="tm-remaining">00:00</b>
+          </div>
+
+          <div class="tm-core-footer">
+            <span class="mono micro tm-label" id="tm-label">REMAINING</span>
+            <span class="tm-core-sep">·</span>
+            <span class="mono micro tm-pct-badge" id="tm-pct">0%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Linear Micro Progress Bar (Preserving #tm-bar-fill for backward compatibility) -->
+      <div class="tm-progress-strip">
+        <div class="tm-bar-track">
+          <div class="tm-bar-fill" id="tm-bar-fill"></div>
+        </div>
+      </div>
+
+      <!-- Holographic Telemetry Cards -->
+      <div class="tm-telemetry-grid">
+        <div class="tm-tele-card">
+          <div class="tm-tele-head mono micro dim">
+            <svg viewBox="0 0 16 16" class="tm-tele-icon"><circle cx="8" cy="8" r="6"/><path d="M8 4v4l2.5 1.5"/></svg>
+            <span>TOTAL DURATION</span>
+          </div>
+          <b class="mono accent tm-tele-val" id="tm-duration">—</b>
+        </div>
+
+        <div class="tm-tele-card">
+          <div class="tm-tele-head mono micro dim">
+            <svg viewBox="0 0 16 16" class="tm-tele-icon"><path d="M8 2v4M8 10v4M2 8h4M10 8h4"/></svg>
+            <span>TIME ELAPSED</span>
+          </div>
+          <b class="mono tm-tele-val" id="tm-elapsed">0.0s</b>
+        </div>
+
+        <div class="tm-tele-card">
+          <div class="tm-tele-head mono micro dim">
+            <svg viewBox="0 0 16 16" class="tm-tele-icon"><circle cx="8" cy="8" r="5"/><circle cx="8" cy="8" r="1.5"/></svg>
+            <span>CHRONO MODE</span>
+          </div>
+          <b class="mono tm-tele-val" id="tm-target-mode">STANDBY</b>
+        </div>
+      </div>
+
+      <!-- Interactive Tactile Quick-Controls -->
+      <div class="tm-cockpit-controls">
+        <button type="button" class="tm-btn tm-btn-add" id="tm-btn-add1" title="Add 1 minute">
+          <span class="tm-btn-icon">+1m</span>
+          <span class="tm-btn-label">ADD 1 MIN</span>
+        </button>
+        <button type="button" class="tm-btn tm-btn-add" id="tm-btn-add5" title="Add 5 minutes">
+          <span class="tm-btn-icon">+5m</span>
+          <span class="tm-btn-label">ADD 5 MIN</span>
+        </button>
+        <button type="button" class="tm-btn tm-btn-danger" id="tm-btn-cancel" title="Cancel active countdown">
+          <svg viewBox="0 0 16 16" class="tm-btn-svg"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+          <span class="tm-btn-label">CANCEL TIMER</span>
+        </button>
+      </div>
+    </div>
+
+    <p class="so-foot mono micro dim" id="tm-foot">
+      SAY "SET A TIMER FOR 2 MINUTES" · ESC TO CLOSE
+    </p>
+  </div>
+</div>
+
+<!-- ═══ REMINDER OVERLAY · panel 09 ════════════════════════════════════════
+     A cinematic, full-screen reminder console. Hidden by default and pinned
+     with position:fixed, so it lives outside the responsive grid entirely and
+     can never push the layout into overflow. Driven by bus.reminder() over SSE
+     -> applyReminder() in app.js. -->
+<div id="reminder-overlay" aria-hidden="true" data-status="idle">
+  <div class="so-scan" aria-hidden="true"></div>
+  <div class="so-grid" aria-hidden="true"></div>
+  <canvas id="rm-canvas" aria-hidden="true"></canvas>
+
+  <div class="so-console">
+    <div class="so-head">
+      <div class="so-title">
+        <svg viewBox="0 0 24 24" class="so-glyph" aria-hidden="true">
+          <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/>
+          <path d="M12 6v6l4 2"/>
+        </svg>
+        <div>
+          <h2>REMINDER</h2>
+          <p class="mono micro dim" id="rm-sub">STANDBY</p>
+        </div>
+      </div>
+      <button type="button" class="so-close" id="rm-close" title="Close (Esc)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13"/></svg>
+      </button>
+    </div>
+
+    <div class="rm-body">
+      <div class="rm-message">
+        <b class="mono rm-text" id="rm-message">&mdash;</b>
+      </div>
+      <div class="rm-time">
+        <b class="mono rm-remaining" id="rm-remaining">00:00</b>
+        <span class="mono micro dim rm-label" id="rm-label">SCHEDULED</span>
+      </div>
+      <div class="so-stats" style="justify-content:center; display:flex; gap:10px;">
+        <div class="so-stat" style="min-width:160px;"><b class="mono" id="rm-scheduled">—</b><span>SCHEDULED FOR</span></div>
+      </div>
+    </div>
+
+    <p class="so-foot mono micro dim" id="rm-foot">
+      SAY "NOTIFY ME AT 5 PM FOR STUDY" · ESC TO CLOSE
+    </p>
+  </div>
+</div>
+
+<!-- ═══ PROTOCOL OVERLAY · panel 10 ═══════════════════════════════════════
+     A cinematic, full-screen workspace protocol console. Driven by
+     bus.protocol() over SSE -> applyProtocol() in app.js. -->
+<div id="protocol-overlay" aria-hidden="true" data-status="idle" data-id="work">
+  <div class="so-scan" aria-hidden="true"></div>
+  <div class="so-grid" aria-hidden="true"></div>
+  <canvas id="pt-canvas" aria-hidden="true"></canvas>
+
+  <div class="so-console pt-console">
+    <div class="so-head">
+      <div class="so-title">
+        <svg viewBox="0 0 24 24" class="so-glyph pt-glyph" aria-hidden="true">
+          <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+          <polyline points="2 17 12 22 22 17"/>
+          <polyline points="2 12 12 17 22 12"/>
+        </svg>
+        <div>
+          <h2 id="pt-title">WORK PROTOCOL</h2>
+          <p class="mono micro dim" id="pt-sub">INITIATING SUBSYSTEMS…</p>
+        </div>
+      </div>
+      <button type="button" class="so-close" id="pt-close" title="Close (Esc)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13"/></svg>
+      </button>
+    </div>
+
+    <div class="pt-body">
+      <div class="pt-status-banner">
+        <div class="pt-badge mono" id="pt-badge">ACTIVE</div>
+        <div class="pt-banner-text mono micro" id="pt-banner-text">WORKSPACE SUBSYSTEMS PRIMED</div>
+      </div>
+
+      <div class="pt-steps-list" id="pt-steps-list">
+        <!-- Steps injected dynamically by applyProtocol -->
+      </div>
+    </div>
+
+    <p class="so-foot mono micro dim" id="pt-foot">
+      SAY "INITIATE WORK PROTOCOL" · ESC TO CLOSE
+    </p>
+  </div>
+</div>
+
+<!-- ═══ EXECUTIVE BRIEFING OVERLAY · panel 11 ═════════════════════════════
+     An executive start-of-day / end-of-day holographic briefing console.
+     Driven by bus.briefing() over SSE -> applyBriefing() in app.js. -->
+<div id="briefing-overlay" aria-hidden="true" data-mode="morning">
+  <div class="so-scan" aria-hidden="true"></div>
+  <div class="so-grid" aria-hidden="true"></div>
+
+  <div class="so-console bf-console">
+    <div class="so-head">
+      <div class="so-title">
+        <svg viewBox="0 0 24 24" class="so-glyph bf-glyph" aria-hidden="true">
+          <circle cx="12" cy="12" r="5"/>
+          <line x1="12" y1="1" x2="12" y2="3"/>
+          <line x1="12" y1="21" x2="12" y2="23"/>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+          <line x1="1" y1="12" x2="3" y2="12"/>
+          <line x1="21" y1="12" x2="23" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+        <div>
+          <h2 id="bf-title">EXECUTIVE MORNING BRIEFING</h2>
+          <p class="mono micro dim" id="bf-sub">ALL PRIMARY SYSTEMS ONLINE</p>
+        </div>
+      </div>
+      <button type="button" class="so-close" id="bf-close" title="Close (Esc)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13"/></svg>
+      </button>
+    </div>
+
+    <div class="bf-grid">
+      <!-- Card 1: Atmosphere & Weather -->
+      <div class="bf-card" id="bf-weather-card">
+        <div class="bf-card-head">
+          <span class="mono micro accent-cyan">ATMOSPHERE & CLIMATE</span>
+          <span class="bf-tag mono micro" id="bf-weather-place">CURRENT CITY</span>
+        </div>
+        <div class="bf-weather-body">
+          <div class="bf-temp-block">
+            <span class="bf-temp-num mono" id="bf-temp">--</span>
+            <span class="bf-temp-unit mono">°C</span>
+          </div>
+          <div class="bf-weather-meta">
+            <div class="bf-meta-condition" id="bf-condition">Clear Sky</div>
+            <div class="bf-meta-sub mono micro dim" id="bf-weather-details">HUM --% · WIND -- KM/H</div>
+          </div>
+        </div>
+        <div class="bf-rain-bar-wrap">
+          <div class="bf-rain-label mono micro dim">
+            <span>PRECIPITATION PROBABILITY</span>
+            <span id="bf-rain-pct">0%</span>
+          </div>
+          <div class="bf-rain-bar"><div class="bf-rain-fill" id="bf-rain-fill" style="width: 0%;"></div></div>
+        </div>
+      </div>
+
+      <!-- Card 2: Multi-Calendar Temporal -->
+      <div class="bf-card" id="bf-temporal-card">
+        <div class="bf-card-head">
+          <span class="mono micro accent-cyan">TEMPORAL COORDINATES</span>
+          <span class="bf-tag mono micro" id="bf-clock-time">--:-- BST</span>
+        </div>
+        <div class="bf-calendar-list">
+          <div class="bf-cal-row">
+            <span class="bf-cal-badge mono micro">GREGORIAN</span>
+            <span class="bf-cal-val" id="bf-cal-eng">Loading...</span>
+          </div>
+          <div class="bf-cal-row">
+            <span class="bf-cal-badge mono micro">BANGABDA</span>
+            <span class="bf-cal-val bn-text" id="bf-cal-bn">লোড হচ্ছে...</span>
+          </div>
+          <div class="bf-cal-row">
+            <span class="bf-cal-badge mono micro">HIJRI</span>
+            <span class="bf-cal-val" id="bf-cal-ar">লোড হচ্ছে...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 3: Comms & Priority Inbox -->
+      <div class="bf-card" id="bf-inbox-card">
+        <div class="bf-card-head">
+          <span class="mono micro accent-cyan">SECURE COMMUNICATIONS</span>
+          <span class="bf-badge mono micro" id="bf-unread-badge">0 UNREAD</span>
+        </div>
+        <div class="bf-inbox-list" id="bf-inbox-list">
+          <div class="bf-empty-inbox mono micro dim">INBOX ZERO · NO PENDING MESSAGES</div>
+        </div>
+      </div>
+
+      <!-- Card 4: System & Network Telemetry -->
+      <div class="bf-card" id="bf-telemetry-card">
+        <div class="bf-card-head">
+          <span class="mono micro accent-cyan">HARDWARE TELEMETRY</span>
+          <span class="bf-tag mono micro" id="bf-net-status">ONLINE</span>
+        </div>
+        <div class="bf-telemetry-body">
+          <div class="bf-telem-row">
+            <div class="bf-telem-icon">⚡</div>
+            <div class="bf-telem-info">
+              <div class="bf-telem-title mono micro">POWER PROFILE</div>
+              <div class="bf-telem-val" id="bf-battery-val">AC Connected (Workstation)</div>
+            </div>
+          </div>
+          <div class="bf-telem-row">
+            <div class="bf-telem-icon">🌐</div>
+            <div class="bf-telem-info">
+              <div class="bf-telem-title mono micro">NETWORK LATENCY</div>
+              <div class="bf-telem-val" id="bf-network-val">Checking...</div>
+            </div>
+          </div>
+          <div class="bf-telem-row">
+            <div class="bf-telem-icon">🎵</div>
+            <div class="bf-telem-info">
+              <div class="bf-telem-title mono micro">AMBIENT SOUNDTRACK</div>
+              <div class="bf-telem-val" id="bf-audio-val">Silent / Standby</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bf-spoken-box">
+      <div class="bf-spoken-label mono micro dim">RON EXECUTIVE SUMMARY</div>
+      <p class="bf-spoken-text" id="bf-spoken-text">Good morning, Sir. All primary systems are online and calibrated.</p>
+    </div>
+
+    <p class="so-foot mono micro dim">
+      SAY "GOOD MORNING RON" OR "EVENING BRIEFING" · ESC TO CLOSE
+    </p>
+  </div>
+</div>
+
+<!-- ═══ AUTONOMOUS DEEP RESEARCH OVERLAY · panel 12 ═══════════════════════
+     A multi-source autonomous research and dossier synthesis console.
+     Driven by bus.research() over SSE -> applyResearch() in app.js. -->
+<div id="research-overlay" aria-hidden="true" data-phase="idle">
+  <div class="so-scan" aria-hidden="true"></div>
+  <div class="so-grid" aria-hidden="true"></div>
+
+  <div class="so-console rs-console">
+    <div class="so-head">
+      <div class="so-title">
+        <svg viewBox="0 0 24 24" class="so-glyph rs-glyph" aria-hidden="true">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+        <div>
+          <div class="rs-head-top">
+            <h2 id="rs-title">AUTONOMOUS DEEP RESEARCH 2.0</h2>
+            <div class="rs-depth-pills mono micro">
+              <span class="rs-depth-pill" data-depth="quick" id="rs-pill-quick">QUICK SCAN</span>
+              <span class="rs-depth-pill active" data-depth="deep" id="rs-pill-deep">DEEP RESEARCH</span>
+              <span class="rs-depth-pill" data-depth="exhaustive" id="rs-pill-exhaustive">EXHAUSTIVE</span>
+            </div>
+          </div>
+          <p class="mono micro dim" id="rs-topic">TOPIC: INITIALIZING MULTI-ENGINE RESEARCH VECTORS…</p>
+        </div>
+      </div>
+      <div class="rs-head-actions">
+        <button type="button" class="rs-tool-btn mono micro" id="rs-btn-open-pdf" title="Open PDF">OPEN PDF</button>
+        <button type="button" class="rs-tool-btn mono micro" id="rs-btn-open-folder" title="Open Documents Folder">DOCS FOLDER</button>
+        <button type="button" class="rs-tool-btn mono micro" id="rs-btn-copy" title="Copy Dossier Markdown">COPY REPORT</button>
+        <button type="button" class="so-close" id="rs-close" title="Close (Esc)">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Quick Research Launcher Bar -->
+    <div class="rs-input-bar">
+      <input type="text" id="rs-input-topic" class="mono" placeholder="Enter research query or comparison (e.g., 'Supabase vs Firebase 2026', 'Solid-state batteries')…" />
+      <button type="button" id="rs-btn-launch" class="rs-launch-btn mono micro">DISPATCH RESEARCH</button>
+    </div>
+
+    <!-- Overlay Navigation Tabs -->
+    <div class="rs-tabs mono micro">
+      <button type="button" class="rs-tab-btn active" data-tab="telemetry" id="rs-tab-btn-telemetry">1. TELEMETRY &amp; SOURCES</button>
+      <button type="button" class="rs-tab-btn" data-tab="dossier" id="rs-tab-btn-dossier">2. READ DOSSIER</button>
+      <button type="button" class="rs-tab-btn" data-tab="matrix" id="rs-tab-btn-matrix">3. COMPARISON MATRIX</button>
+      <button type="button" class="rs-tab-btn" data-tab="archive" id="rs-tab-btn-archive">4. RESEARCH ARCHIVE</button>
+    </div>
+
+    <!-- TAB 1: Live Telemetry & Sources -->
+    <div class="rs-tab-content active" id="rs-tab-content-telemetry">
+      <!-- 5-Phase Stepper -->
+      <div class="rs-stepper">
+        <div class="rs-step" id="rs-step-1" data-phase="planning">
+          <div class="rs-step-dot">1</div>
+          <span class="mono micro">PLANNING</span>
+        </div>
+        <div class="rs-step-line" id="rs-line-1"></div>
+        <div class="rs-step" id="rs-step-2" data-phase="harvest">
+          <div class="rs-step-dot">2</div>
+          <span class="mono micro">HARVEST</span>
+        </div>
+        <div class="rs-step-line" id="rs-line-2"></div>
+        <div class="rs-step" id="rs-step-3" data-phase="scraping">
+          <div class="rs-step-dot">3</div>
+          <span class="mono micro">SCRAPE</span>
+        </div>
+        <div class="rs-step-line" id="rs-line-3"></div>
+        <div class="rs-step" id="rs-step-4" data-phase="synthesis">
+          <div class="rs-step-dot">4</div>
+          <span class="mono micro">SYNTHESIS</span>
+        </div>
+        <div class="rs-step-line" id="rs-line-4"></div>
+        <div class="rs-step" id="rs-step-5" data-phase="done">
+          <div class="rs-step-dot">5</div>
+          <span class="mono micro">DOSSIER</span>
+        </div>
+      </div>
+
+      <!-- Status Banner -->
+      <div class="rs-status-banner">
+        <div class="rs-badge mono" id="rs-badge">INVESTIGATING</div>
+        <div class="rs-banner-text mono micro" id="rs-status-text">ANALYZING RESEARCH TOPIC VECTORS…</div>
+        <div class="rs-pct mono micro" id="rs-pct">15%</div>
+      </div>
+
+      <!-- Split Grid: Sources & Key Intelligence -->
+      <div class="rs-grid">
+        <!-- Left: Sources Harvested -->
+        <div class="rs-card">
+          <div class="rs-card-head">
+            <span class="mono micro accent-cyan">VERIFIED MULTI-ENGINE SOURCES</span>
+            <span class="rs-tag mono micro" id="rs-source-count">0 SOURCES</span>
+          </div>
+          <div class="rs-sources-list" id="rs-sources-list">
+            <div class="rs-empty mono micro dim">HARVESTING SEARCH RESULTS…</div>
+          </div>
+        </div>
+
+        <!-- Right: Key Intelligence & Takeaways -->
+        <div class="rs-card">
+          <div class="rs-card-head">
+            <span class="mono micro accent-cyan">INTELLIGENCE EXTRACTED</span>
+            <span class="rs-tag mono micro" id="rs-intel-count">0 TAKEAWAYS</span>
+          </div>
+          <div class="rs-intel-list" id="rs-intel-list">
+            <div class="rs-empty mono micro dim">AWAITING CROSS-SOURCE SYNTHESIS…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Dossier Box -->
+      <div class="rs-dossier-box" id="rs-dossier-box">
+        <div class="rs-dossier-head">
+          <span class="mono micro accent-cyan">EXECUTIVE DOSSIER SUMMARY</span>
+          <div class="rs-export-tags" id="rs-export-tags">
+            <!-- Injected dynamically when done -->
+          </div>
+        </div>
+        <p class="rs-summary-text" id="rs-summary-text">Synthesizing findings across verified references…</p>
+      </div>
+    </div>
+
+    <!-- TAB 2: Read Dossier (Rendered Markdown) -->
+    <div class="rs-tab-content" id="rs-tab-content-dossier">
+      <div class="rs-reader-toolbar">
+        <span class="mono micro accent-cyan" id="rs-reader-status">PUBLICATION-GRADE DOSSIER</span>
+        <button type="button" class="rs-tool-btn mono micro" id="rs-reader-speak-btn">LISTEN TO BRIEFING</button>
+      </div>
+      <div class="rs-dossier-viewer" id="rs-dossier-viewer">
+        <div class="rs-empty mono micro dim">NO DOSSIER GENERATED YET. DISPATCH A RESEARCH QUERY OR SELECT FROM ARCHIVE.</div>
+      </div>
+    </div>
+
+    <!-- TAB 3: Comparison Matrix -->
+    <div class="rs-tab-content" id="rs-tab-content-matrix">
+      <div class="rs-matrix-toolbar">
+        <span class="mono micro accent-cyan">SIDE-BY-SIDE ARCHITECTURAL BREAKDOWN</span>
+      </div>
+      <div class="rs-matrix-viewer" id="rs-matrix-viewer">
+        <div class="rs-empty mono micro dim">COMPARISON MATRIX IS GENERATED FOR 'COMPARE &lt;A&gt; VS &lt;B&gt;' QUERIES.</div>
+      </div>
+    </div>
+
+    <!-- TAB 4: Research Archive -->
+    <div class="rs-tab-content" id="rs-tab-content-archive">
+      <div class="rs-archive-toolbar">
+        <span class="mono micro accent-cyan">HISTORICAL RESEARCH ARCHIVE</span>
+        <button type="button" class="rs-tool-btn mono micro" id="rs-archive-refresh-btn">REFRESH ARCHIVE</button>
+      </div>
+      <div class="rs-archive-list" id="rs-archive-list">
+        <div class="rs-empty mono micro dim">LOADING ARCHIVED DOSSIERS…</div>
+      </div>
+    </div>
+
+    <p class="so-foot mono micro dim">
+      SAY "RESEARCH &lt;TOPIC&gt;" OR "COMPARE &lt;A&gt; VS &lt;B&gt;" · "OPEN RESEARCH PDF" · ESC TO CLOSE
+    </p>
+  </div>
+</div>
+
+<!-- ═══ AUTONOMOUS WEB AUTOPILOT OVERLAY · panel 13 ═══════════════════════
+     A live headless browser controller with real-time viewport streaming,
+     autonomous form filling, DOM extraction, and data comparison.
+     Driven by bus.autopilot() over SSE -> applyAutopilot() in app.js. -->
+<div id="autopilot-overlay" aria-hidden="true" data-phase="idle">
+  <div class="so-scan" aria-hidden="true"></div>
+  <div class="so-grid" aria-hidden="true"></div>
+
+  <div class="so-console ap-console">
+    <div class="so-head">
+      <div class="so-title">
+        <svg viewBox="0 0 24 24" class="so-glyph ap-glyph" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="2" y1="12" x2="22" y2="12"/>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+        </svg>
+        <div>
+          <h2 id="ap-title">AUTONOMOUS WEB AUTOPILOT</h2>
+          <p class="mono micro dim" id="ap-target">TARGET: INITIALIZING AUTONOMOUS NAVIGATOR…</p>
+        </div>
+      </div>
+      <div class="ap-url-bar mono micro" id="ap-url-bar">
+        <span class="ap-ssl-lock">🔒</span>
+        <span class="ap-url-text" id="ap-url-text">about:blank</span>
+      </div>
+      <button type="button" class="so-close" id="ap-close" title="Close (Esc)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13"/></svg>
+      </button>
+    </div>
+
+    <!-- 4-Phase Stepper -->
+    <div class="ap-stepper">
+      <div class="ap-step" id="ap-step-1" data-phase="navigating">
+        <div class="ap-step-dot">1</div>
+        <span class="mono micro">NAVIGATE</span>
+      </div>
+      <div class="ap-step-line" id="ap-line-1"></div>
+      <div class="ap-step" id="ap-step-2" data-phase="interacting">
+        <div class="ap-step-dot">2</div>
+        <span class="mono micro">INTERACT</span>
+      </div>
+      <div class="ap-step-line" id="ap-line-2"></div>
+      <div class="ap-step" id="ap-step-3" data-phase="harvesting">
+        <div class="ap-step-dot">3</div>
+        <span class="mono micro">HARVEST</span>
+      </div>
+      <div class="ap-step-line" id="ap-line-3"></div>
+      <div class="ap-step" id="ap-step-4" data-phase="done">
+        <div class="ap-step-dot">4</div>
+        <span class="mono micro">SYNTHESIZE</span>
+      </div>
+    </div>
+
+    <!-- Status Banner -->
+    <div class="ap-status-banner">
+      <div class="ap-badge mono" id="ap-badge">STANDBY</div>
+      <div class="ap-banner-text mono micro" id="ap-status-text">INITIALIZING AUTOPILOT ENGINE…</div>
+      <div class="ap-platform-tag mono micro" id="ap-platform-tag">PLATFORM: CHROMIUM</div>
+    </div>
+
+    <!-- Main Split-Screen Console -->
+    <div class="ap-split-view">
+      <!-- Left: Live Browser Viewport -->
+      <div class="ap-viewport-container">
+        <div class="ap-viewport-head">
+          <div class="ap-browser-dots">
+            <span class="ap-dot ap-dot-red"></span>
+            <span class="ap-dot ap-dot-yellow"></span>
+            <span class="ap-dot ap-dot-green"></span>
+          </div>
+          <span class="mono micro dim">LIVE CHROMIUM VIEWPORT (1280x800)</span>
+          <span class="ap-live-badge mono micro" id="ap-live-indicator">LIVE FEED</span>
+        </div>
+        <div class="ap-viewport-frame" id="ap-viewport-frame">
+          <img id="ap-viewport-img" src="" alt="Live Browser Viewport" style="display:none;" />
+          <div class="ap-viewport-placeholder mono micro" id="ap-viewport-placeholder">
+            <div class="ap-radar-pulse"></div>
+            <span>AWAITING STREAMING FRAMES…</span>
+          </div>
+          <div class="ap-crosshair top-left"></div>
+          <div class="ap-crosshair top-right"></div>
+          <div class="ap-crosshair bottom-left"></div>
+          <div class="ap-crosshair bottom-right"></div>
+        </div>
+      </div>
+
+      <!-- Right: Structured Comparison & Extraction Table -->
+      <div class="ap-data-container">
+        <div class="ap-data-head">
+          <span class="mono micro accent-cyan">EXTRACTED COMPARISON MATRIX</span>
+          <span class="ap-item-count mono micro" id="ap-item-count">0 ITEMS</span>
+        </div>
+        <div class="ap-table-wrapper" id="ap-table-wrapper">
+          <table class="ap-table" id="ap-table">
+            <thead>
+              <tr>
+                <th>ITEM / TITLE</th>
+                <th>PRICE / ID</th>
+                <th>RATING / STATUS</th>
+                <th>ACTION</th>
+              </tr>
+            </thead>
+            <tbody id="ap-table-body">
+              <tr>
+                <td colspan="4" class="ap-empty mono micro dim">HARVESTING PAGE LISTINGS…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Debrief Summary -->
+        <div class="ap-debrief-box" id="ap-debrief-box">
+          <div class="ap-debrief-head">
+            <span class="mono micro accent-cyan">AUTOPILOT SYNTHESIS DEBRIEF</span>
+            <div class="ap-csv-badge mono micro" id="ap-csv-badge"></div>
+          </div>
+          <p class="ap-summary-text" id="ap-summary-text">Awaiting mission synthesis…</p>
+        </div>
+      </div>
+    </div>
+
+    <p class="so-foot mono micro dim">
+      AUTOPILOT ACTIVE · STREAMING VIA HEADLESS CHROMIUM · ESC TO CLOSE
+    </p>
+  </div>
+</div>
+
+<!-- ═══ NEURAL LONG-TERM MEMORY & KNOWLEDGE GRAPH · panel 14 ═════════════
+     Interactive HTML5 Canvas knowledge graph, categorized memory cards deck,
+     real-time synaptic pulses, search & filtering, and memory ledger.
+     Driven by bus.memory() over SSE -> applyMemory() in app.js. -->
+<div id="memory-overlay" aria-hidden="true" data-mode="graph">
+  <div class="so-scan" aria-hidden="true"></div>
+  <div class="so-grid" aria-hidden="true"></div>
+
+  <div class="so-console mem-console">
+    <!-- Header -->
+    <div class="so-head">
+      <div class="so-title">
+        <svg viewBox="0 0 24 24" class="so-glyph mem-glyph" aria-hidden="true">
+          <circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/>
+          <circle cx="5" cy="7" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="19" cy="7" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="6" cy="17" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="18" cy="17" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <line x1="12" y1="8" x2="12" y2="4" stroke="currentColor" stroke-width="1.5"/>
+          <line x1="9" y1="10" x2="6.8" y2="8.5" stroke="currentColor" stroke-width="1.5"/>
+          <line x1="15" y1="10" x2="17.2" y2="8.5" stroke="currentColor" stroke-width="1.5"/>
+          <line x1="9" y1="14" x2="7.5" y2="15.5" stroke="currentColor" stroke-width="1.5"/>
+          <line x1="15" y1="14" x2="16.5" y2="15.5" stroke="currentColor" stroke-width="1.5"/>
+        </svg>
+        <div>
+          <h2 id="mem-title">NEURAL LONG-TERM MEMORY MATRIX</h2>
+          <p class="mono micro dim" id="mem-subtitle">DURABLE KNOWLEDGE GRAPH &amp; SYNAPTIC ASSOCIATIONS</p>
+        </div>
+      </div>
+
+      <div class="mem-controls">
+        <div class="mem-search-bar">
+          <input type="text" id="mem-search-input" class="mono micro" placeholder="Filter memories or nodes..." />
+        </div>
+        <div class="mem-view-toggle">
+          <button type="button" class="mem-toggle-btn active" id="mem-btn-graph">GRAPH</button>
+          <button type="button" class="mem-toggle-btn" id="mem-btn-ledger">CARDS</button>
+        </div>
+      </div>
+
+      <button type="button" class="so-close" id="mem-close" title="Close (Esc)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13"/></svg>
+      </button>
+    </div>
+
+    <!-- Category Filters & Stats Row -->
+    <div class="mem-category-bar">
+      <div class="mem-filters" id="mem-filters">
+        <button type="button" class="mem-pill active" data-cat="all">ALL (<span id="mem-total-count">0</span>)</button>
+        <button type="button" class="mem-pill" data-cat="identity">IDENTITY</button>
+        <button type="button" class="mem-pill" data-cat="family">FAMILY</button>
+        <button type="button" class="mem-pill" data-cat="preference">PREFERENCES</button>
+        <button type="button" class="mem-pill" data-cat="credential">SECURITY</button>
+        <button type="button" class="mem-pill" data-cat="date">DATES</button>
+        <button type="button" class="mem-pill" data-cat="project">PROJECTS</button>
+        <button type="button" class="mem-pill" data-cat="general">GENERAL</button>
+      </div>
+      <div class="mem-add-quick">
+        <button type="button" class="mem-add-btn mono micro" id="mem-add-toggle">+ NOTE FACT</button>
+      </div>
+    </div>
+
+    <!-- Quick Add Inline Form (Collapsible) -->
+    <div class="mem-add-panel" id="mem-add-panel" style="display:none;">
+      <input type="text" id="mem-new-content" class="mono micro" placeholder="What should Ron remember? (e.g., My favorite food is Biryani)" />
+      <select id="mem-new-category" class="mono micro">
+        <option value="general">Category: Auto-detect</option>
+        <option value="preference">Preference</option>
+        <option value="family">Family</option>
+        <option value="credential">Credential/Secret</option>
+        <option value="date">Date/Event</option>
+        <option value="project">Project</option>
+        <option value="identity">Identity</option>
+      </select>
+      <button type="button" class="mem-save-btn mono micro" id="mem-new-save">STORE MEMORY</button>
+      <button type="button" class="mem-cancel-btn mono micro" id="mem-new-cancel">CANCEL</button>
+    </div>
+
+    <!-- View Mode 1: Interactive Physics/Synaptic Canvas Knowledge Graph -->
+    <div class="mem-graph-container" id="mem-graph-view">
+      <canvas id="mem-canvas" width="1200" height="520"></canvas>
+      <div class="mem-graph-legend mono micro">
+        <span class="legend-dot" style="background:#00f0ff"></span> USER
+        <span class="legend-dot" style="background:#b055ff"></span> PREFERENCE
+        <span class="legend-dot" style="background:#ff0077"></span> FAMILY
+        <span class="legend-dot" style="background:#ffbe0b"></span> ENTITY
+        <span class="legend-dot" style="background:#00e5ff"></span> MEMORY
+      </div>
+      <div class="mem-node-tooltip mono micro" id="mem-tooltip" style="display:none;"></div>
+    </div>
+
+    <!-- View Mode 2: Memory Ledger Cards Grid -->
+    <div class="mem-ledger-container" id="mem-ledger-view" style="display:none;">
+      <div class="mem-cards-grid" id="mem-cards-grid">
+        <div class="mem-empty mono micro dim">NO MEMORIES STORED YET. SAY "RON, REMEMBER THAT..." TO RECORD FACTS.</div>
+      </div>
+    </div>
+
+    <p class="so-foot mono micro dim">
+      SAY "RON, REMEMBER THAT..." OR "WHAT IS MY..." · CLICK GRAPH NODES TO EXPAND · ESC TO CLOSE
+    </p>
+  </div>
+</div>
+
+<!-- ══ EXECUTIVE COACH & FOCUS STANDUP OVERLAY (PANEL 15) ══ -->
+<div id="coach-overlay" aria-hidden="true" class="coach-overlay">
+  <div class="so-scan" aria-hidden="true"></div>
+  <div class="so-grid" aria-hidden="true"></div>
+
+  <div class="so-console coach-console" role="dialog" aria-label="Executive Coach & Daily Standup">
+    <!-- Header -->
+    <div class="so-head coach-head">
+      <div class="so-head-left">
+        <span class="so-tag mono micro" style="color:var(--c-accent, #00f0ff);border-color:var(--c-accent, #00f0ff);">PANEL 15</span>
+        <div>
+          <h2 class="so-title mono">EXECUTIVE COACH &amp; FOCUS HUD</h2>
+          <p class="mono micro dim" id="coach-subtitle">DAILY STANDUP · TELEMETRY RINGS · ACCOUNTABILITY PARTNER</p>
+        </div>
+      </div>
+
+      <div class="coach-head-controls">
+        <label class="coach-switch mono micro" title="Proactively warn when distracted">
+          <span>DISTRACTION BLOCKER</span>
+          <input type="checkbox" id="coach-blocker-toggle" />
+          <span class="switch-slider"></span>
+        </label>
+        <button type="button" class="coach-debrief-btn mono micro" id="coach-btn-debrief" title="Trigger evening debrief retrospective">
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M8 1a7 7 0 1 0 7 7A7 7 0 0 0 8 1zm0 12.6A5.6 5.6 0 1 1 13.6 8 5.6 5.6 0 0 1 8 13.6zm.7-9.1H7v4.2l3.5 2.1.7-1.1-2.9-1.7z"/></svg>
+          DEBRIEF
+        </button>
+        <button type="button" class="so-close" id="coach-close" title="Close (Esc)">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Body Container -->
+    <div class="coach-body-grid">
+      <!-- Left Column: Holographic 3-Ring Activity Visualizer & Focus Telemetry -->
+      <div class="coach-rings-col">
+        <div class="coach-rings-wrapper">
+          <svg class="coach-rings-svg" viewBox="0 0 240 240" width="220" height="220">
+            <!-- Background Tracks -->
+            <circle cx="120" cy="120" r="95" class="ring-bg ring-goals-bg" />
+            <circle cx="120" cy="120" r="75" class="ring-bg ring-focus-bg" />
+            <circle cx="120" cy="120" r="55" class="ring-bg ring-score-bg" />
+            <!-- Active Progress Concentric Rings (circumferences: 2*pi*95=596.9, 2*pi*75=471.2, 2*pi*55=345.6) -->
+            <circle cx="120" cy="120" r="95" id="ring-goals" class="ring-fg ring-goals-fg" stroke-dasharray="597" stroke-dashoffset="597" />
+            <circle cx="120" cy="120" r="75" id="ring-focus" class="ring-fg ring-focus-fg" stroke-dasharray="471" stroke-dashoffset="471" />
+            <circle cx="120" cy="120" r="55" id="ring-score" class="ring-fg ring-score-fg" stroke-dasharray="346" stroke-dashoffset="346" />
+          </svg>
+          <div class="coach-ring-center">
+            <div class="coach-center-score mono" id="coach-center-score">0%</div>
+            <div class="coach-center-label mono micro dim">PRODUCTIVITY</div>
+          </div>
+        </div>
+
+        <!-- Metrics Legend & Breakdown Cards -->
+        <div class="coach-metrics-cards">
+          <div class="coach-metric-card ring-card-goals">
+            <div class="cm-head mono micro"><span class="cm-dot dot-cyan"></span>GOALS COMPLETED</div>
+            <div class="cm-val mono" id="coach-stat-goals">0 / 0 <span class="cm-pct" id="coach-pct-goals">(0%)</span></div>
+          </div>
+          <div class="coach-metric-card ring-card-focus">
+            <div class="cm-head mono micro"><span class="cm-dot dot-magenta"></span>FOCUS RATIO</div>
+            <div class="cm-val mono" id="coach-stat-focus">100% <span class="cm-sub" id="coach-sub-focus">(0.0h focus)</span></div>
+          </div>
+          <div class="coach-metric-card ring-card-score">
+            <div class="cm-head mono micro"><span class="cm-dot dot-purple"></span>EXECUTIVE SCORE</div>
+            <div class="cm-val mono" id="coach-stat-score">0 / 100</div>
+          </div>
+        </div>
+
+        <!-- Live Active Window Classification Pill -->
+        <div class="coach-active-telemetry mono micro">
+          <div class="cat-label dim">FOREGROUND PROCESS:</div>
+          <div class="cat-content">
+            <span class="cat-badge badge-neutral" id="coach-win-badge">NEUTRAL</span>
+            <span class="cat-title" id="coach-win-title" title="Desktop">Desktop</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Daily Non-Negotiables Checklist & Management -->
+      <div class="coach-goals-col">
+        <div class="coach-goals-header">
+          <h3 class="mono">DAILY NON-NEGOTIABLES</h3>
+          <span class="mono micro dim" id="coach-date-label">TODAY</span>
+        </div>
+
+        <!-- Add Goal Input -->
+        <form class="coach-add-form" id="coach-add-form">
+          <input type="text" id="coach-new-goal-input" class="mono micro" placeholder="Add non-negotiable goal (e.g. Finish API documentation)..." autocomplete="off" />
+          <button type="submit" class="coach-add-btn mono micro">+ ADD</button>
+        </form>
+
+        <!-- Goals List -->
+        <div class="coach-goals-list" id="coach-goals-list">
+          <div class="coach-empty-goals mono micro dim">
+            NO GOALS LOGGED FOR TODAY.<br/>
+            SAY "START STANDUP" OR TYPE YOUR NON-NEGOTIABLES ABOVE.
+          </div>
+        </div>
+
+        <!-- Quick Focus Bar Breakdown -->
+        <div class="coach-focus-bar-wrap">
+          <div class="cfb-labels mono micro">
+            <span class="cfb-focus-lbl">FOCUS: <b id="cfb-focus-hrs">0.0h</b></span>
+            <span class="cfb-distract-lbl">DISTRACT: <b id="cfb-distract-min">0m</b></span>
+          </div>
+          <div class="cfb-bar">
+            <div class="cfb-fill-focus" id="cfb-fill-focus" style="width: 100%;"></div>
+            <div class="cfb-fill-distract" id="cfb-fill-distract" style="width: 0%;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <p class="so-foot mono micro dim">
+      VOICE: "START STANDUP" · "WHAT ARE MY GOALS" · "I FINISHED GOAL 1" · "EVENING DEBRIEF" · PRESS ESC TO CLOSE (CTRL+SHIFT+F)
+    </p>
+  </div>
+</div>
+
+<!-- ═══ RON WORLD REPORT · LIVE INTEL BROADCAST (PANEL 16) ════════════ -->
+<div id="intel-overlay" aria-hidden="true" class="intel-overlay" data-status="idle">
+  <div class="so-scan" aria-hidden="true"></div>
+  <div class="so-grid" aria-hidden="true"></div>
+
+  <div class="so-console intel-console" role="dialog" aria-label="RON World Report · Live Intel Broadcast">
+    <!-- Header -->
+    <div class="so-head intel-head">
+      <div class="so-head-left">
+        <span class="so-tag mono micro" style="color:var(--c-accent, #00f0ff);border-color:var(--c-accent, #00f0ff);">PANEL 16</span>
+        <div>
+          <h2 class="so-title mono">RON WORLD REPORT</h2>
+          <p class="mono micro dim" id="intel-subtitle">LIVE INTEL BROADCAST · 98.4 MHz · HACKER NEWS · CRYPTO · GITHUB</p>
+        </div>
+      </div>
+
+      <div class="intel-head-controls">
+        <button type="button" class="intel-btn-refresh mono micro" id="intel-btn-refresh" title="Refresh all intelligence feeds">
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"/><path fill-rule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z"/></svg>
+          HARVEST
+        </button>
+        <button type="button" class="so-close" id="intel-close" title="Close (Esc)">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Category Filter Bar -->
+    <div class="intel-filter-bar">
+      <div class="intel-filters" id="intel-filters">
+        <button type="button" class="intel-pill active" data-cat="all">ALL INTEL</button>
+        <button type="button" class="intel-pill" data-cat="football">FOOTBALL / SOCCER</button>
+        <button type="button" class="intel-pill" data-cat="crypto">FINANCIAL MARKETS</button>
+        <button type="button" class="intel-pill" data-cat="tech">GLOBAL TECH</button>
+        <button type="button" class="intel-pill" data-cat="hn">HACKER NEWS</button>
+        <button type="button" class="intel-pill" data-cat="github">GITHUB TRENDING</button>
+      </div>
+      <div class="intel-freq-badge mono micro">
+        <span class="freq-pulse"></span>
+        <span id="intel-freq-txt">RADIO STREAM ACTIVE · 98.4 MHz</span>
+      </div>
+    </div>
+
+    <!-- Top Spotlight: Live Crypto Radar & Weather Banner -->
+    <div class="intel-spotlight-grid">
+      <!-- Crypto Assets Strip -->
+      <div class="intel-crypto-strip" id="intel-crypto-strip">
+        <div class="crypto-card">
+          <div class="cc-head mono micro"><span class="cc-icon">₿</span> BTC / USD</div>
+          <div class="cc-val mono" id="btc-price">$89,400</div>
+          <div class="cc-change mono micro up" id="btc-change">+1.5%</div>
+        </div>
+        <div class="crypto-card">
+          <div class="cc-head mono micro"><span class="cc-icon">Ξ</span> ETH / USD</div>
+          <div class="cc-val mono" id="eth-price">$2,650</div>
+          <div class="cc-change mono micro down" id="eth-change">-0.8%</div>
+        </div>
+        <div class="crypto-card">
+          <div class="cc-head mono micro"><span class="cc-icon">◎</span> SOL / USD</div>
+          <div class="cc-val mono" id="sol-price">$145</div>
+          <div class="cc-change mono micro up" id="sol-change">+3.2%</div>
+        </div>
+      </div>
+
+      <!-- Live Broadcast Atmospheric Telemetry -->
+      <div class="intel-wx-card" id="intel-wx-card">
+        <div class="iw-head mono micro">ATMOSPHERIC RADAR</div>
+        <div class="iw-body">
+          <b class="mono" id="intel-wx-temp">--°C</b>
+          <span class="mono micro dim" id="intel-wx-desc">ANALYZING LOCAL SECTOR…</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Intelligence Feeds Grid -->
+    <div class="intel-feeds-grid">
+      <!-- Column 1: Football / Soccer Intelligence -->
+      <div class="intel-feed-col" id="col-football">
+        <div class="if-col-head mono micro">
+          <span class="if-dot dot-amber"></span>
+          <span>FOOTBALL · 2026 MATCHES &amp; BREAKING NEWS</span>
+        </div>
+        <div class="intel-cards-list" id="intel-cards-football">
+          <div class="intel-empty mono micro dim">HARVESTING 2026 FOOTBALL MATCHES &amp; NEWS WIRE…</div>
+        </div>
+      </div>
+
+      <!-- Column 2: Breaking Tech & Hacker News -->
+      <div class="intel-feed-col" id="col-tech-hn">
+        <div class="if-col-head mono micro">
+          <span class="if-dot dot-cyan"></span>
+          <span>BREAKING TECH &amp; HACKER NEWS</span>
+        </div>
+        <div class="intel-cards-list" id="intel-cards-tech">
+          <div class="intel-empty mono micro dim">HARVESTING GLOBAL WIRE FEEDS…</div>
+        </div>
+      </div>
+
+      <!-- Column 3: Open-Source GitHub Intelligence -->
+      <div class="intel-feed-col" id="col-github">
+        <div class="if-col-head mono micro">
+          <span class="if-dot dot-magenta"></span>
+          <span>GITHUB TRENDING CODEBASE REPOSITORIES</span>
+        </div>
+        <div class="intel-cards-list" id="intel-cards-github">
+          <div class="intel-empty mono micro dim">SCANNING GITHUB REPOSITORY MATRICES…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Spoken Voice Script Stream -->
+    <div class="intel-spoken-box">
+      <div class="is-head mono micro dim">
+        <span>RON RADIO BROADCASTER SYNTHESIS</span>
+        <span class="mono micro" id="intel-timestamp">00:00:00</span>
+      </div>
+      <p class="is-text" id="intel-spoken-text">
+        "Good morning Sir. This is the RON World Intel Report. In tech: DeepMind released a new multi-agent framework. Hacker News is buzzing about local LLM quantization. Bitcoin is up 2.4% at $91,200. No critical emails requiring immediate intervention. What is our first objective?"
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <p class="so-foot mono micro dim">
+      VOICE: "MORNING INTEL BRIEFING" · "WORLD REPORT" · "WHAT'S HAPPENING IN TECH" · CLICK ANY CARD TO OPEN LINK · ESC TO CLOSE (CTRL+SHIFT+I)
+    </p>
+  </div>
+</div>
+
+<!-- ══ WEATHER STATION OVERLAY · panel 05-B ═════════════════════════════
+     A holographic, cinematic Weather Station console with 5-day forecast,
+     3-hour intervals, live atmospheric radar, and executive briefing.
+     Driven by bus.weather_station() over SSE -> applyWeatherStation() in app.js. -->
+<div id="weather-station-overlay" aria-hidden="true" data-status="idle">
+  <div class="so-scan" aria-hidden="true"></div>
+  <div class="so-grid" aria-hidden="true"></div>
+
+  <div class="so-console ws-console" role="dialog" aria-label="RON Holographic Weather Station">
+    <!-- Header -->
+    <div class="so-head ws-head">
+      <div class="so-head-left">
+        <span class="so-tag mono micro" style="color:var(--accent, #00f0ff);border-color:var(--accent, #00f0ff);">MET STATION 05</span>
+        <div>
+          <h2 class="so-title mono">HOLOGRAPHIC WEATHER STATION</h2>
+          <p class="mono micro dim" id="ws-subtitle">OPENWEATHERMAP RADAR ARRAY · 5-DAY SYNOPTIC TELEMETRY</p>
+        </div>
+      </div>
+
+      <div class="ws-head-controls">
+        <button type="button" class="intel-btn-refresh mono micro" id="ws-btn-refresh" title="Refresh meteorological feeds">
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"/><path fill-rule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z"/></svg>
+          SYNC
+        </button>
+        <button type="button" class="so-close" id="ws-close" title="Close (Esc)">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Metadata / Radar Status Strip -->
+    <div class="ws-status-bar">
+      <div class="ws-status-item">
+        <span class="ws-status-label mono micro dim">SECTOR</span>
+        <b class="mono" id="ws-meta-location">SIRAJGANJ, BD</b>
+      </div>
+      <div class="ws-status-item">
+        <span class="ws-status-label mono micro dim">COORDINATES</span>
+        <span class="mono" id="ws-meta-coords">24.45°N, 89.72°E</span>
+      </div>
+      <div class="ws-status-item">
+        <span class="ws-status-label mono micro dim">RADAR PROVIDER</span>
+        <span class="mono accent" id="ws-meta-provider">OPENWEATHERMAP v2.5</span>
+      </div>
+      <div class="ws-status-item">
+        <span class="ws-status-label mono micro dim">LOCAL TIME</span>
+        <span class="mono" id="ws-meta-time">--:--</span>
+      </div>
+      <div class="ws-status-item ws-status-link">
+        <span class="ws-pulse-dot"></span>
+        <span class="mono micro" id="ws-meta-status">SATELLITE TELEMETRY ACTIVE</span>
+      </div>
+    </div>
+
+    <!-- Executive Meteorological Brief Card -->
+    <div class="ws-brief-card" id="ws-brief-card">
+      <div class="ws-brief-head mono micro">
+        <span class="ws-brief-tag">EXECUTIVE BRIEF</span>
+        <span>METEOROLOGICAL INTELLIGENCE SYNTHESIS</span>
+        <span class="mono micro dim" id="ws-brief-time">UPDATED JUST NOW</span>
+      </div>
+      <p class="ws-brief-body" id="ws-brief-text">
+        Initializing atmospheric telemetry feed...
+      </p>
+    </div>
+
+    <!-- Live Telemetry Matrix (6 Radar Cards) -->
+    <div class="ws-telemetry-grid">
+      <!-- 1. Primary Temperature -->
+      <div class="ws-tile ws-tile-temp">
+        <div class="ws-tile-head mono micro">CURRENT TEMPERATURE</div>
+        <div class="ws-tile-content">
+          <div class="ws-temp-cluster">
+            <span class="ws-temp-big mono" id="ws-cur-temp">--°</span>
+            <div class="ws-temp-sub">
+              <span class="mono micro" id="ws-cur-feels">FEELS LIKE --°</span>
+              <span class="ws-cond-tag mono micro" id="ws-cur-cond">STANDBY</span>
+            </div>
+          </div>
+          <div class="ws-temp-range mono micro">
+            <span>HI: <b id="ws-cur-hi">--°</b></span>
+            <span>LO: <b id="ws-cur-lo">--°</b></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Barometric Pressure -->
+      <div class="ws-tile">
+        <div class="ws-tile-head mono micro">BAROMETRIC PRESSURE</div>
+        <div class="ws-tile-content">
+          <b class="ws-metric-val mono" id="ws-cur-pressure">---- <i>hPa</i></b>
+          <div class="ws-metric-sub mono micro dim">ATMOSPHERIC BAROMETER</div>
+          <div class="ws-bar-track"><div class="ws-bar-fill" id="ws-bar-pressure" style="width:50%;"></div></div>
+        </div>
+      </div>
+
+      <!-- 3. Relative Humidity -->
+      <div class="ws-tile">
+        <div class="ws-tile-head mono micro">RELATIVE HUMIDITY</div>
+        <div class="ws-tile-content">
+          <b class="ws-metric-val mono" id="ws-cur-humidity">--<i>%</i></b>
+          <div class="ws-metric-sub mono micro dim" id="ws-cur-dew">DEW POINT: --°C</div>
+          <div class="ws-bar-track"><div class="ws-bar-fill" id="ws-bar-humidity" style="width:65%;"></div></div>
+        </div>
+      </div>
+
+      <!-- 4. Wind Vector -->
+      <div class="ws-tile">
+        <div class="ws-tile-head mono micro">WIND VECTOR</div>
+        <div class="ws-tile-content">
+          <b class="ws-metric-val mono" id="ws-cur-wind">-- <i>km/h</i></b>
+          <div class="ws-metric-sub mono micro" id="ws-cur-winddir">DIRECTION: -- (---°)</div>
+          <div class="ws-metric-sub mono micro dim" id="ws-cur-gust">GUSTS: -- km/h</div>
+        </div>
+      </div>
+
+      <!-- 5. Visibility & Clouds -->
+      <div class="ws-tile">
+        <div class="ws-tile-head mono micro">VISIBILITY &amp; CLOUDS</div>
+        <div class="ws-tile-content">
+          <b class="ws-metric-val mono" id="ws-cur-vis">-- <i>km</i></b>
+          <div class="ws-metric-sub mono micro" id="ws-cur-clouds">CLOUD COVER: --%</div>
+          <div class="ws-bar-track"><div class="ws-bar-fill" id="ws-bar-clouds" style="width:40%;"></div></div>
+        </div>
+      </div>
+
+      <!-- 6. Solar Cycle -->
+      <div class="ws-tile">
+        <div class="ws-tile-head mono micro">SOLAR CYCLE</div>
+        <div class="ws-tile-content">
+          <div class="ws-sun-row">
+            <div><span class="mono micro dim">SUNRISE</span><b class="mono" id="ws-cur-sunrise">--:-- AM</b></div>
+            <div><span class="mono micro dim">SUNSET</span><b class="mono" id="ws-cur-sunset">--:-- PM</b></div>
+          </div>
+          <div class="ws-metric-sub mono micro dim" id="ws-cur-phase">SOLAR ELEVATION: DAYLIGHT</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 24-Hour 3-Hourly Forecast Strip -->
+    <div class="ws-section-box">
+      <div class="ws-section-head mono micro">
+        <span class="ws-sec-dot dot-cyan"></span>
+        <span>24-HOUR SYNOPTIC TIMELINE · 3-HOUR RADAR INTERVALS</span>
+      </div>
+      <div class="ws-hourly-strip" id="ws-hourly-strip">
+        <div class="ws-empty mono micro dim">STREAMING HOURLY RADAR...</div>
+      </div>
+    </div>
+
+    <!-- 5-Day Regional Synoptic Forecast -->
+    <div class="ws-section-box">
+      <div class="ws-section-head mono micro">
+        <span class="ws-sec-dot dot-amber"></span>
+        <span>5-DAY SYNOPTIC FORECAST MATRIX</span>
+      </div>
+      <div class="ws-daily-grid" id="ws-daily-grid">
+        <div class="ws-empty mono micro dim">HARVESTING 5-DAY PROJECTIONS...</div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <p class="so-foot mono micro dim">
+      VOICE: "WEATHER STATION" · "SHOW WEATHER STATION" · CLICK PANEL 05 TO TOGGLE · ESC TO CLOSE (CTRL+SHIFT+W)
+    </p>
+  </div>
+</div>
+
+<!-- =====================================================================
+     THE RON WORLD TRIBUNE — HOLOGRAPHIC BROADSHEET MODAL
+     ===================================================================== -->
+<div class="so-scrim tb-scrim" id="tribune-overlay" hidden data-status="idle" aria-hidden="true" aria-modal="true" role="dialog">
+  <div class="so-window tb-window">
+    <!-- Header -->
+    <div class="so-head tb-head">
+      <div class="so-head-left">
+        <span class="so-tag mono micro" style="color:#ffaa00;border-color:#ffaa00;">EDITORIAL BUREAU</span>
+        <div>
+          <h2 class="so-title mono tb-header-title">THE RON WORLD TRIBUNE</h2>
+          <p class="mono micro dim" id="tb-subtitle">AUTONOMOUS EDITORIAL DESK · 50+ GLOBAL &amp; REGIONAL SOURCES CONCURRENTLY ANALYZED</p>
+        </div>
+      </div>
+
+      <div class="tb-head-controls">
+        <button type="button" class="tb-btn-action mono micro accent-bg" id="tb-btn-broadcast" title="Listen to 3-minute spoken executive broadcast">
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M11.536 14.01A8.473 8.473 0 0 0 14.026 8a8.473 8.473 0 0 0-2.49-6.01l-.708.707A7.476 7.476 0 0 1 13.025 8c0 2.071-.84 3.946-2.197 5.303l.708.707z"/><path d="M10.121 12.596A6.48 6.48 0 0 0 12.025 8a6.48 6.48 0 0 0-1.904-4.596l-.707.707A5.483 5.483 0 0 1 11.025 8a5.483 5.483 0 0 1-1.61 3.89l.706.706z"/><path d="M8.707 11.182A4.486 4.486 0 0 0 10.025 8a4.486 4.486 0 0 0-1.318-3.182L8 5.525A3.489 3.489 0 0 1 9.025 8 3.49 3.49 0 0 1 8 10.475l.707.707zM6.717 3.55A.5.5 0 0 1 7 4v8a.5.5 0 0 1-.812.39L3.825 10.5H1.5A.5.5 0 0 1 1 10V6a.5.5 0 0 1 .5-.5h2.325l2.363-1.89a.5.5 0 0 1 .529-.06z"/></svg>
+          3-MIN AUDIO BROADCAST
+        </button>
+        <button type="button" class="tb-btn-action mono micro" id="tb-btn-pdf" title="Open printed broadsheet PDF newspaper in Documents">
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2zM9.5 3A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5v2z"/><path d="M4.603 14.087a.81.81 0 0 1-.438-.42c-.195-.388-.13-.776.08-1.168.214-.4.53-.787.94-1.15.528-.466 1.15-.9 1.83-1.282.49-.272.997-.506 1.517-.7a15.8 15.8 0 0 1-.202-1.36 14.28 14.28 0 0 1-.065-.899c0-.498.055-.92.164-1.25.11-.334.29-.58.543-.734.254-.154.55-.213.88-.175.405.048.72.222.94.52.22.298.31.674.27 1.123-.038.43-.188.887-.45 1.365-.262.48-.616.96-1.06 1.436.56.242 1.17.447 1.82.613.65.166 1.33.27 2.03.31.42.02.77.13 1.05.33.28.2.45.47.51.81.06.34-.01.67-.21.99-.2.32-.51.52-.93.6-.42.08-.94.02-1.56-.18-.62-.2-1.3-.53-2.04-.99a22.2 22.2 0 0 1-2.42-1.74 13.9 13.9 0 0 1-1.89.87c-.67.24-1.28.43-1.83.57-.55.14-1.01.21-1.38.21-.37 0-.67-.08-.9-.24z"/></svg>
+          OPEN NEWSPAPER PDF
+        </button>
+        <button type="button" class="intel-btn-refresh mono micro" id="tb-btn-refresh" title="Re-harvest feeds and publish new edition">
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"/><path fill-rule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z"/></svg>
+          PUBLISH
+        </button>
+        <button type="button" class="so-close" id="tb-close" title="Close (Esc)">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Broadsheet Meta Bar -->
+    <div class="ws-status-bar tb-meta-bar">
+      <div class="ws-status-item">
+        <span class="ws-status-label mono micro dim">EDITION</span>
+        <b class="mono" id="tb-meta-edition">--</b>
+      </div>
+      <div class="ws-status-item">
+        <span class="ws-status-label mono micro dim">VOLUME</span>
+        <span class="mono" id="tb-meta-vol">VOL. IV</span>
+      </div>
+      <div class="ws-status-item">
+        <span class="ws-status-label mono micro dim">CIRCULATION DATE</span>
+        <span class="mono accent" id="tb-meta-date">--</span>
+      </div>
+      <div class="ws-status-item">
+        <span class="ws-status-label mono micro dim">REGIONAL BUREAU</span>
+        <span class="mono" id="tb-meta-weather">--</span>
+      </div>
+      <div class="ws-status-item ws-status-link">
+        <span class="ws-pulse-dot" style="background:#ffaa00;box-shadow:0 0 8px #ffaa00;"></span>
+        <span class="mono micro" id="tb-meta-sources">50+ SOURCES HARVESTED</span>
+      </div>
+    </div>
+
+    <!-- Executive Morning Summary Matrix -->
+    <div class="tb-exec-card">
+      <div class="tb-exec-head mono micro">
+        <span class="ws-sec-dot dot-amber"></span>
+        <span>★ EXECUTIVE SUMMARY · HARVESTED &amp; CROSS-REFERENCED INTELLIGENCE ★</span>
+      </div>
+      <div class="tb-exec-grid">
+        <div class="tb-exec-quad">
+          <span class="tb-quad-tag mono micro">[1] GEOPOLITICS &amp; WORLD</span>
+          <p class="tb-quad-text" id="tb-exec-world">Streaming global dispatches...</p>
+        </div>
+        <div class="tb-exec-quad">
+          <span class="tb-quad-tag mono micro">[2] TECHNOLOGY &amp; FRONTIER AI</span>
+          <p class="tb-quad-text" id="tb-exec-tech">Analyzing computing architectures...</p>
+        </div>
+        <div class="tb-exec-quad">
+          <span class="tb-quad-tag mono micro">[3] FINANCIAL MARKETS &amp; CRYPTO</span>
+          <p class="tb-quad-text" id="tb-exec-markets">Calculating spot market delta...</p>
+        </div>
+        <div class="tb-exec-quad">
+          <span class="tb-quad-tag mono micro">[4] PITCH &amp; REGIONAL INTELLIGENCE</span>
+          <p class="tb-quad-text" id="tb-exec-sports">Processing tournament telemetry...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Desk Filter Tabs -->
+    <div class="tb-tabs-bar">
+      <button type="button" class="tb-tab active" data-desk="all">ALL DESKS</button>
+      <button type="button" class="tb-tab" data-desk="tech">TECH &amp; AI</button>
+      <button type="button" class="tb-tab" data-desk="world">WORLD AFFAIRS</button>
+      <button type="button" class="tb-tab" data-desk="markets">MARKETS &amp; CRYPTO</button>
+      <button type="button" class="tb-tab" data-desk="science">SCIENCE &amp; SPACE</button>
+      <button type="button" class="tb-tab" data-desk="sports">THE PITCH (FOOTBALL)</button>
+      <button type="button" class="tb-tab" data-desk="regional">REGIONAL BUREAU</button>
+    </div>
+
+    <!-- Front Page Lead Story -->
+    <div class="tb-lead-card" id="tb-lead-container">
+      <div class="tb-lead-badge mono micro">FRONT PAGE LEAD DISPATCH</div>
+      <h3 class="tb-lead-title" id="tb-lead-title">Autonomous Intelligence Synthesis Achieves Full Synchronization</h3>
+      <div class="tb-lead-byline mono micro dim" id="tb-lead-byline">DISPATCHED BY R.O.N. EDITORIAL BUREAU · GLOBAL WIRE</div>
+      <p class="tb-lead-body" id="tb-lead-body">Global digital infrastructure accelerates coordination as sovereign intelligence nodes establish real-time synthesis protocols across multi-domain feeds.</p>
+      <blockquote class="tb-lead-quote" id="tb-lead-quote">"Autonomous cognitive synthesis represents the definitive threshold between information overload and actionable clarity."</blockquote>
+    </div>
+
+    <!-- Multi-Column Dispatches Grid -->
+    <div class="tb-articles-grid" id="tb-articles-grid">
+      <!-- Injected via app.js -->
+    </div>
+
+    <!-- Footer -->
+    <p class="so-foot mono micro dim">
+      VOICE: "READ ME TODAY'S TRIBUNE" · "OPEN TRIBUNE" · "GENERATE TRIBUNE" · ESC TO CLOSE (CTRL+SHIFT+T)
+    </p>
+  </div>
+</div>
+
+<!-- ══ CYBER WATCHDOG · NETWORK RADAR OVERLAY ═══════════════════════════ -->
+<div class="so-scrim radar-scrim" id="radar-overlay" hidden data-status="idle" aria-hidden="true" aria-modal="true" role="dialog" style="display: none;">
+  <div class="so-backdrop" id="radar-backdrop"></div>
+  <div class="so-card radar-modal-card">
+    <!-- Header -->
+    <div class="so-head tb-head radar-head">
+      <div class="tb-brand-left radar-brand-left">
+        <svg class="tb-crest" viewBox="0 0 40 40" width="36" height="36" aria-hidden="true">
+          <circle cx="20" cy="20" r="18" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="20" cy="20" r="12" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="3 3"/>
+          <circle cx="20" cy="20" r="6" fill="none" stroke="currentColor" stroke-width="1"/>
+          <line x1="20" y1="2" x2="20" y2="38" stroke="currentColor" stroke-width="1" opacity="0.6"/>
+          <line x1="2" y1="20" x2="38" y2="20" stroke="currentColor" stroke-width="1" opacity="0.6"/>
+        </svg>
+        <div>
+          <div class="tb-kicker mono micro">CYBER DEFENSE PERIMETER RADAR · 2.4 / 5 GHz BAND</div>
+          <h2 class="so-title tb-masthead">RON CYBER WATCHDOG</h2>
+        </div>
+      </div>
+
+      <div class="tb-head-controls">
+        <button type="button" class="tb-btn-action mono micro accent-bg" id="radar-btn-scan" title="Initiate active ARP/ping sweep">
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"/></svg>
+          SWEEP PERIMETER
+        </button>
+        <button type="button" class="so-close" id="radar-close" title="Close (Esc)">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Telemetry Status Bar -->
+    <div class="ws-status-bar tb-meta-bar">
+      <div class="ws-status-item">
+        <span class="ws-status-label mono micro dim">SUBNET</span>
+        <b class="mono" id="radar-meta-subnet">192.168.1.0/24</b>
+      </div>
+      <div class="ws-status-item">
+        <span class="ws-status-label mono micro dim">GATEWAY</span>
+        <span class="mono" id="radar-meta-gateway">192.168.1.1</span>
+      </div>
+      <div class="ws-status-item">
+        <span class="ws-status-label mono micro dim">CONNECTED NODES</span>
+        <span class="mono accent" id="radar-meta-count">-- NODES</span>
+      </div>
+      <div class="ws-status-item">
+        <span class="ws-status-label mono micro dim">ROGUE INTRUSIONS</span>
+        <span class="mono" id="radar-meta-rogue" style="color:var(--warn)">0 DETECTED</span>
+      </div>
+      <div class="ws-status-item ws-status-link">
+        <span class="ws-status-label mono micro dim">SECURITY POSTURE</span>
+        <span class="mono" id="radar-meta-status" style="color:#00ff9d">SECURE</span>
+      </div>
+    </div>
+
+    <!-- Dual Layout: Left Circular Sonar Sweep + Right Devices & Port Audit -->
+    <div class="radar-body-grid">
+      <!-- Sonar Canvas Scope -->
+      <div class="radar-scope-panel">
+        <div class="radar-canvas-wrap">
+          <canvas id="radar-canvas" width="460" height="460"></canvas>
+          <div class="radar-sweep-cone"></div>
+          <div class="radar-target-tag mono micro" id="radar-hover-tag">IDLE PERIMETER</div>
+        </div>
+        <div class="radar-legend mono micro">
+          <span><i class="dot-trusted"></i> TRUSTED NODE</span>
+          <span><i class="dot-host"></i> WORKSTATION</span>
+          <span><i class="dot-rogue"></i> ROGUE / UNKNOWN</span>
+        </div>
+      </div>
+
+      <!-- Connected Nodes & Port Audit List -->
+      <div class="radar-intel-panel">
+        <div class="radar-panel-sec">
+          <div class="radar-sec-head mono micro">
+            <span>SUBNET NODES &amp; HARDWARE VENDORS</span>
+            <span class="dim" id="radar-nodes-head">0 VERIFIED</span>
+          </div>
+          <div class="radar-device-list" id="radar-device-list">
+            <!-- Injected via app.js -->
+            <div class="radar-empty-msg mono micro dim">No active sweep data. Click SWEEP PERIMETER.</div>
+          </div>
+        </div>
+
+        <div class="radar-panel-sec">
+          <div class="radar-sec-head mono micro">
+            <span>LOCAL WORKSTATION PORT SECURITY AUDIT</span>
+            <span class="dim">FIREWALL STATUS</span>
+          </div>
+          <div class="radar-port-grid" id="radar-port-grid">
+            <!-- Injected via app.js -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <p class="so-foot mono micro dim">
+      VOICE: "SCAN LOCAL NETWORK" · "WHO IS ON MY WIFI" · "NETWORK RADAR" · ESC TO CLOSE (CTRL+SHIFT+N)
+    </p>
+  </div>
+</div>
+
+<!-- ══ SMART PDF & DOCUMENT INTELLIGENCE OVERLAY ═══════════════════════════ -->
+<div class="so-scrim doc-scrim" id="docintel-overlay" hidden data-status="idle" aria-hidden="true" aria-modal="true" role="dialog" style="display: none;">
+  <div class="so-backdrop" id="docintel-backdrop"></div>
+  <div class="so-card docintel-modal-card">
+    <!-- Header -->
+    <div class="so-head tb-head doc-head">
+      <div class="tb-brand-left doc-brand-left">
+        <svg class="tb-crest doc-crest" viewBox="0 0 40 40" width="36" height="36" aria-hidden="true">
+          <rect x="8" y="4" width="24" height="32" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M14 12h12M14 18h12M14 24h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <circle cx="27" cy="27" r="7" fill="#080e1a" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M25 27l1.5 1.5 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div>
+          <div class="tb-kicker mono micro">NEURAL DOCUMENT &amp; SPREADSHEET INTELLIGENCE</div>
+          <h2 class="so-title tb-masthead">RON DOCUMENT INTELLIGENCE</h2>
+        </div>
+      </div>
+
+      <div class="tb-head-controls">
+        <button type="button" class="tb-btn-action mono micro accent-bg" id="doc-btn-browse" title="Select PDF, Word, or CSV file">
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V10.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/></svg>
+          BROWSE FILE
+        </button>
+        <input type="file" id="doc-file-input" accept=".pdf,.docx,.csv,.tsv,.txt,.md" style="display:none;" />
+        <button type="button" class="so-close" id="doc-close" title="Close (Esc)">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Telemetry Meta Bar -->
+    <div class="ws-status-bar tb-meta-bar">
+      <div class="ws-status-item">
+        <span class="ws-status-label mono micro dim">DOCUMENT</span>
+        <b class="mono accent" id="doc-meta-filename">NO FILE LOADED</b>
+      </div>
+      <div class="ws-status-item">
+        <span class="ws-status-label mono micro dim">PAGES</span>
+        <span class="mono" id="doc-meta-pages">--</span>
+      </div>
+      <div class="ws-status-item">
+        <span class="ws-status-label mono micro dim">WORD COUNT</span>
+        <span class="mono" id="doc-meta-words">--</span>
+      </div>
+      <div class="ws-status-item">
+        <span class="ws-status-label mono micro dim">TABLES EXTRACTED</span>
+        <span class="mono" id="doc-meta-tables" style="color:#00ff9d">0 DETECTED</span>
+      </div>
+      <div class="ws-status-item ws-status-link">
+        <span class="ws-status-label mono micro dim">ANALYSIS STATUS</span>
+        <span class="mono" id="doc-meta-status" style="color:#00f0ff">STANDBY</span>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs Bar -->
+    <div class="doc-tabs-bar mono micro">
+      <button type="button" class="doc-tab-btn active" data-tab="digest" id="doc-tab-btn-digest">1. EXECUTIVE DIGEST</button>
+      <button type="button" class="doc-tab-btn" data-tab="tables" id="doc-tab-btn-tables">2. EXTRACTED TABLES</button>
+      <button type="button" class="doc-tab-btn" data-tab="reader" id="doc-tab-btn-reader">3. DOCUMENT READER</button>
+      <button type="button" class="doc-tab-btn" data-tab="qa" id="doc-tab-btn-qa">4. AI INQUIRY &amp; MATH</button>
+    </div>
+
+    <!-- Main Body: Multi-tab content -->
+    <div class="doc-body-container">
+      <!-- Drag & Drop Overlay Zone (hidden once file is loaded, active on drag) -->
+      <div class="doc-dropzone" id="doc-dropzone">
+        <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2">
+          <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+        </svg>
+        <div class="doc-drop-text mono">DRAG &amp; DROP ANY PDF, WORD, OR CSV FILE HERE</div>
+        <div class="doc-drop-sub mono micro dim">Supports up to 100+ page contracts, technical manuals, bank statements &amp; invoices</div>
+      </div>
+
+      <!-- Tab 1: Executive Digest -->
+      <div class="doc-tab-content active" id="doc-tab-digest">
+        <div class="doc-digest-grid">
+          <div class="doc-digest-left">
+            <div class="doc-panel-sec">
+              <div class="doc-sec-head mono micro">
+                <span>CORE PREMISE</span>
+                <span class="dim">EXECUTIVE SYNTHESIS</span>
+              </div>
+              <p class="doc-premise-text" id="doc-premise-text">Ingest any document to generate instantaneous executive synthesis and actionable takeaways.</p>
+            </div>
+
+            <div class="doc-panel-sec">
+              <div class="doc-sec-head mono micro">
+                <span>TOP 5 ACTIONABLE TAKEAWAYS</span>
+                <span class="dim">PRIORITY POINTS</span>
+              </div>
+              <ul class="doc-takeaways-list" id="doc-takeaways-list">
+                <li class="mono micro dim">Awaiting document upload...</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="doc-digest-right">
+            <div class="doc-panel-sec">
+              <div class="doc-sec-head mono micro">
+                <span>CRITICAL FIGURES, DATES &amp; LIABILITIES</span>
+                <span class="dim">METRIC EXTRACTS</span>
+              </div>
+              <div class="doc-metrics-box mono" id="doc-metrics-box">
+                No active document data.
+              </div>
+            </div>
+
+            <div class="doc-panel-sec doc-audio-sec">
+              <div class="doc-sec-head mono micro">
+                <span>30-SECOND SPOKEN DEBRIEF</span>
+                <span class="dim">VOICE CADENCE</span>
+              </div>
+              <p class="doc-spoken-text" id="doc-spoken-text">"Ron is ready to parse your documents, Sir."</p>
+              <button type="button" class="tb-btn-action mono micro accent-bg" id="doc-btn-speak">
+                <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M11.536 14.01A8.473 8.473 0 0 0 14.026 8a8.473 8.473 0 0 0-2.49-6.01l-.708.707A7.476 7.476 0 0 1 13.025 8c0 2.071-.84 3.946-2.197 5.303l.708.707z"/><path d="M6.717 3.55A.5.5 0 0 1 7 4v8a.5.5 0 0 1-.812.39L3.825 10.5H1.5A.5.5 0 0 1 1 10V6a.5.5 0 0 1 .5-.5h2.325l2.363-1.89a.5.5 0 0 1 .529-.06z"/></svg>
+                SPEAK DEBRIEF
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Extracted Tables -->
+      <div class="doc-tab-content" id="doc-tab-tables">
+        <div class="doc-tables-toolbar">
+          <span class="mono micro dim" id="doc-tables-counter">0 TABLES EXTRACTED</span>
+          <button type="button" class="tb-btn-action mono micro" id="doc-btn-export-csv" title="Export all tables as CSV files to Documents/RON_Extracted_Tables">
+            <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/></svg>
+            EXPORT ALL TABLES TO CSV
+          </button>
+        </div>
+        <div class="doc-tables-container" id="doc-tables-container">
+          <div class="radar-empty-msg mono micro dim">No tables detected in current document.</div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Document Reader -->
+      <div class="doc-tab-content" id="doc-tab-reader">
+        <div class="doc-reader-toolbar">
+          <input type="text" class="doc-reader-search mono micro" id="doc-reader-search" placeholder="Search document text..." />
+          <span class="mono micro dim" id="doc-reader-page-info">PAGE 1</span>
+        </div>
+        <div class="doc-reader-body" id="doc-reader-body">
+          <pre class="doc-raw-text mono" id="doc-raw-text">No document text available.</pre>
+        </div>
+      </div>
+
+      <!-- Tab 4: Interactive Q&A Drawer -->
+      <div class="doc-tab-content" id="doc-tab-qa">
+        <div class="doc-qa-container">
+          <div class="doc-qa-history" id="doc-qa-history">
+            <div class="doc-qa-msg bot">
+              <div class="doc-qa-author mono micro">RON DOC INTELLIGENCE</div>
+              <div class="doc-qa-text">Ask any question about the document, or request specific arithmetic calculations (e.g. "Calculate total expenses in this statement", "What does section 4 state?").</div>
+            </div>
+          </div>
+
+          <div class="doc-qa-presets">
+            <button type="button" class="doc-chip-preset mono micro" data-prompt="What does the warranty or liability clause state?">WARRANTY CLAUSE</button>
+            <button type="button" class="doc-chip-preset mono micro" data-prompt="Calculate the total financial amounts or expenses in this document.">CALCULATE TOTAL EXPENSES</button>
+            <button type="button" class="doc-chip-preset mono micro" data-prompt="List all deadlines, due dates, and milestone dates mentioned.">KEY DEADLINES</button>
+            <button type="button" class="doc-chip-preset mono micro" data-prompt="Summarize the legal obligations and risks for each party.">LEGAL RISKS &amp; OBLIGATIONS</button>
+          </div>
+
+          <form class="doc-qa-form" id="doc-qa-form">
+            <input type="text" class="doc-qa-input mono" id="doc-qa-input" placeholder="Type question or calculation query..." />
+            <button type="submit" class="tb-btn-action mono micro accent-bg" id="doc-qa-submit">ASK</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <p class="so-foot mono micro dim">
+      VOICE: "SUMMARIZE THIS PDF" · "EXTRACT TABLES" · "CALCULATE TOTAL EXPENSES" · ESC TO CLOSE (CTRL+SHIFT+D)
+    </p>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

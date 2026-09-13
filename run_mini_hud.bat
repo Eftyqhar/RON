@@ -10,9 +10,9 @@ start "" wscript.exe "%~dp0run_ron_silent.vbs"
 exit /b
 
 :console
-title R.O.N. Debug Console
+title R.O.N. Mini-HUD Console
 echo ===================================================
-echo   R.O.N. — Interactive Debug Console Mode
+echo   R.O.N. Mini-HUD — Debug Console Mode
 echo ===================================================
-python run_mini_hud.py
+python run_mini_hud.py %*
 pause
