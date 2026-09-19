@@ -50,8 +50,9 @@ _current_edition = {}
 
 def _fetch_url(url: str, timeout: float = 3.0, headers: dict = None) -> bytes | None:
     """Fetch URL with timeout and standard browser User-Agent."""
+    ua = "curl/8.4.0" if "espn.com" in url.lower() else "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     default_headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "User-Agent": ua,
         "Accept": "application/rss+xml, application/xml, text/xml, application/json, text/html, */*",
     }
     if headers:
@@ -235,11 +236,18 @@ def _harvest_custom_espn(league_code: str, league_name: str) -> list:
             name = ev.get("name", "")
             comp = ev.get("competitions", [{}])[0]
             competitors = comp.get("competitors", [])
-            status = comp.get("status", {}).get("type", {}).get("detail", "Scheduled")
+            st_obj = comp.get("status", {}).get("type", {})
+            status = st_obj.get("shortDetail") or st_obj.get("detail", "Scheduled")
+            st_state = st_obj.get("state", "pre")
             score_str = ""
             if len(competitors) >= 2:
                 c1, c2 = competitors[0], competitors[1]
-                score_str = f"{c1.get('team', {}).get('displayName', '')} {c1.get('score', '0')} - {c2.get('score', '0')} {c2.get('team', {}).get('displayName', '')}"
+                t1 = c1.get("team", {}).get("displayName", "")
+                t2 = c2.get("team", {}).get("displayName", "")
+                if st_state == "pre":
+                    score_str = f"{t1} vs {t2}"
+                else:
+                    score_str = f"{t1} {c1.get('score', '0')} - {c2.get('score', '0')} {t2}"
             
             title = score_str if score_str else name
             items.append({

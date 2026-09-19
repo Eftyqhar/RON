@@ -11,6 +11,8 @@ broadcast with audio chimes and a holographic HUD report:
   - Real-time HUD broadcast via bus.intel()
 """
 
+import datetime
+import html
 import io
 import json
 import math
@@ -39,9 +41,16 @@ _last_intel_data = {}
 
 
 def _http_get(url: str, timeout: float = 3.5, headers: dict = None) -> bytes | None:
-    """Safely perform HTTP GET with timeout and default User-Agent."""
+    """Safely perform HTTP GET with timeout and default User-Agent.
+
+    ESPN and specific CDN scoreboards block browser UAs without matching TLS
+    signatures with HTTP 403 Forbidden. Using curl/8.4.0 guarantees successful
+    handshakes across ESPN scoreboard, schedule, and RSS feeds.
+    """
+    ua = "curl/8.4.0" if "espn.com" in url.lower() else "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     default_headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": ua,
+        "Accept": "*/*",
     }
     if headers:
         default_headers.update(headers)
@@ -49,7 +58,7 @@ def _http_get(url: str, timeout: float = 3.5, headers: dict = None) -> bytes | N
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return resp.read()
-    except Exception as e:
+    except Exception:
         return None
 
 
@@ -347,83 +356,109 @@ FALLBACK_FOOTBALL_MATCHES = [
 
 
 def fetch_football_matches(limit: int = 8) -> list:
-    """Fetch live and latest 2026 season football matches from ESPN scoreboards & team schedules.
+    """Fetch live and upcoming 2026 season football matches and recent scores.
 
-    Spotlights: Real Madrid, Barcelona, Manchester City, Manchester United,
-    Bayern Munich, Arsenal, and Bangladesh National Team.
+    Harvesters cover live in-progress matches, upcoming scheduled fixtures, and
+    recent results across Premier League, La Liga, Bundesliga, Serie A,
+    UEFA Champions League, and International football.
     """
+    now = datetime.datetime.now(datetime.timezone.utc)
+    today_str = now.strftime("%Y%m%d")
+    tomorrow_str = (now + datetime.timedelta(days=1)).strftime("%Y%m%d")
+    yesterday_str = (now - datetime.timedelta(days=1)).strftime("%Y%m%d")
+
     leagues = [
-        ("Premier League", "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard"),
-        ("La Liga", "https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/scoreboard"),
-        ("Bundesliga", "https://site.api.espn.com/apis/site/v2/sports/soccer/ger.1/scoreboard"),
-        ("UEFA Champions League", "https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions/scoreboard"),
-        ("International", "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.friendly/scoreboard"),
+        ("Premier League", "eng.1"),
+        ("La Liga", "esp.1"),
+        ("Bundesliga", "ger.1"),
+        ("Serie A", "ita.1"),
+        ("UEFA Champions League", "uefa.champions"),
+        ("International", "fifa.friendly"),
     ]
 
     harvested = []
     seen_match_keys = set()
     lock = threading.Lock()
 
-    # 1. Harvest multi-league live scoreboards
-    def _fetch_league(league_name, endpoint):
+    def _parse_and_append_event(league_name, ev):
+        comps = ev.get("competitions") or []
+        if not comps:
+            return
+        comp = comps[0]
+        competitors = comp.get("competitors", [])
+        if len(competitors) < 2:
+            return
+
+        home = competitors[0] if competitors[0].get("homeAway") == "home" else competitors[1]
+        away = competitors[1] if home == competitors[0] else competitors[0]
+
+        h_name = home.get("team", {}).get("displayName") or home.get("team", {}).get("name") or "Home"
+        a_name = away.get("team", {}).get("displayName") or away.get("team", {}).get("name") or "Away"
+
+        st_type = comp.get("status", {}).get("type", {}) or ev.get("status", {}).get("type", {})
+        desc = st_type.get("description", "Scheduled")
+        detail = st_type.get("shortDetail") or st_type.get("detail", desc)
+        state = st_type.get("state", "pre")  # "in" (live), "post" (completed), "pre" (upcoming)
+
+        if state == "pre":
+            h_score = "-"
+            a_score = "-"
+        else:
+            h_val = home.get("score")
+            a_val = away.get("score")
+            if isinstance(h_val, dict):
+                h_score = str(h_val.get("displayValue") or int(h_val.get("value", 0)))
+            else:
+                h_score = str(h_val) if h_val is not None else "0"
+
+            if isinstance(a_val, dict):
+                a_score = str(a_val.get("displayValue") or int(a_val.get("value", 0)))
+            else:
+                a_score = str(a_val) if a_val is not None else "0"
+
+        h_logo = home.get("team", {}).get("logo") or (home.get("team", {}).get("logos", [{}])[0].get("href", "") if home.get("team", {}).get("logos") else "")
+        a_logo = away.get("team", {}).get("logo") or (away.get("team", {}).get("logos", [{}])[0].get("href", "") if away.get("team", {}).get("logos") else "")
+        date_str = ev.get("date", "")[:10]
+
+        m_id = str(ev.get("id") or comp.get("id") or f"{h_name}_{a_name}")
+        match_url = f"https://www.espn.com/soccer/match/_/gameId/{m_id}"
+        is_prio = any(kw in h_name.lower() or kw in a_name.lower() for kw in PRIORITY_CLUBS)
+
+        key = f"{h_name.lower()}_vs_{a_name.lower()}_{date_str}"
+        with lock:
+            if key not in seen_match_keys:
+                seen_match_keys.add(key)
+                harvested.append({
+                    "id": m_id,
+                    "league": league_name,
+                    "home": h_name,
+                    "away": a_name,
+                    "home_score": h_score,
+                    "away_score": a_score,
+                    "home_logo": h_logo,
+                    "away_logo": a_logo,
+                    "status": detail,
+                    "state": state,
+                    "date": date_str,
+                    "detail": desc,
+                    "is_priority": is_prio,
+                    "url": match_url,
+                })
+
+    # 1. Harvest multi-league scoreboards for Today, Tomorrow (upcoming), and Yesterday (recent scores)
+    def _fetch_league_scoreboard(league_name, league_code, date_str):
+        endpoint = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league_code}/scoreboard?dates={date_str}"
         raw = _http_get(endpoint, timeout=3.0)
         if not raw:
             return
         try:
             data = json.loads(raw.decode("utf-8"))
             for ev in data.get("events", []):
-                comps = ev.get("competitions") or []
-                if not comps:
-                    continue
-                comp = comps[0]
-                competitors = comp.get("competitors", [])
-                if len(competitors) < 2:
-                    continue
-
-                home = competitors[0] if competitors[0].get("homeAway") == "home" else competitors[1]
-                away = competitors[1] if home == competitors[0] else competitors[0]
-
-                h_name = home.get("team", {}).get("displayName") or home.get("team", {}).get("name") or "Home"
-                a_name = away.get("team", {}).get("displayName") or away.get("team", {}).get("name") or "Away"
-                h_score = str(home.get("score", "0"))
-                a_score = str(away.get("score", "0"))
-                h_logo = home.get("team", {}).get("logo") or ""
-                a_logo = away.get("team", {}).get("logo") or ""
-
-                st_type = ev.get("status", {}).get("type", {})
-                desc = st_type.get("description", "Scheduled")
-                detail = st_type.get("shortDetail") or st_type.get("detail", desc)
-                state = st_type.get("state", "pre")
-                date_str = ev.get("date", "")[:10]
-
-                m_id = ev.get("id") or f"{h_name}_{a_name}"
-                match_url = f"https://www.espn.com/soccer/match/_/gameId/{m_id}"
-                is_prio = any(kw in h_name.lower() or kw in a_name.lower() for kw in PRIORITY_CLUBS)
-
-                key = f"{h_name.lower()}_vs_{a_name.lower()}"
-                with lock:
-                    if key not in seen_match_keys:
-                        seen_match_keys.add(key)
-                        harvested.append({
-                            "id": m_id,
-                            "league": league_name,
-                            "home": h_name,
-                            "away": a_name,
-                            "home_score": h_score,
-                            "away_score": a_score,
-                            "home_logo": h_logo,
-                            "away_logo": a_logo,
-                            "status": detail,
-                            "state": state,
-                            "date": date_str,
-                            "detail": desc,
-                            "is_priority": is_prio,
-                            "url": match_url,
-                        })
-        except Exception as e:
+                _parse_and_append_event(league_name, ev)
+        except Exception:
             pass
 
-    # 2. Harvest latest 2026 matches directly from priority team schedules
+    # 2. Harvest latest season matches directly from priority team schedules
     def _fetch_team_schedule(team_name, league, tid):
         url = f"https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/teams/{tid}/schedule"
         raw = _http_get(url, timeout=3.0)
@@ -433,25 +468,44 @@ def fetch_football_matches(limit: int = 8) -> list:
             data = json.loads(raw.decode("utf-8"))
             events = data.get("events", [])
             if events:
-                ev = events[-1]
-                comps = ev.get("competitions", [{}])[0]
-                competitors = comps.get("competitors", [])
+                # events[0] is the most recent match for the team in 2026/27
+                ev = events[0]
+                comps = ev.get("competitions", [{}])
+                if not comps:
+                    return
+                comp = comps[0]
+                competitors = comp.get("competitors", [])
                 if len(competitors) >= 2:
                     home = competitors[0] if competitors[0].get("homeAway") == "home" else competitors[1]
                     away = competitors[1] if home == competitors[0] else competitors[0]
                     h_name = home.get("team", {}).get("displayName", "Home")
                     a_name = away.get("team", {}).get("displayName", "Away")
-                    h_score = home.get("score", "")
-                    if isinstance(h_score, dict):
-                        h_score = str(int(h_score.get("value", 0)))
-                    a_score = away.get("score", "")
-                    if isinstance(a_score, dict):
-                        a_score = str(int(a_score.get("value", 0)))
-                    st_type = ev.get("status", {}).get("type", {})
+
+                    st_type = comp.get("status", {}).get("type", {}) or ev.get("status", {}).get("type", {})
                     detail = st_type.get("shortDetail") or st_type.get("detail", "FT")
+                    state = st_type.get("state", "post")
                     date_str = ev.get("date", "")[:10]
-                    league_display = "La Liga" if "esp" in league else ("Premier League" if "eng" in league else "Bundesliga")
-                    key = f"{h_name.lower()}_vs_{a_name.lower()}"
+
+                    if state == "pre":
+                        h_score = "-"
+                        a_score = "-"
+                    else:
+                        h_val = home.get("score")
+                        a_val = away.get("score")
+                        if isinstance(h_val, dict):
+                            h_score = str(h_val.get("displayValue") or int(h_val.get("value", 0)))
+                        else:
+                            h_score = str(h_val) if h_val is not None else "0"
+                        if isinstance(a_val, dict):
+                            a_score = str(a_val.get("displayValue") or int(a_val.get("value", 0)))
+                        else:
+                            a_score = str(a_val) if a_val is not None else "0"
+
+                    league_display = "La Liga" if "esp" in league else ("Premier League" if "eng" in league else ("Bundesliga" if "ger" in league else "Serie A"))
+                    h_logo = home.get("team", {}).get("logo") or (home.get("team", {}).get("logos", [{}])[0].get("href", "") if home.get("team", {}).get("logos") else "")
+                    a_logo = away.get("team", {}).get("logo") or (away.get("team", {}).get("logos", [{}])[0].get("href", "") if away.get("team", {}).get("logos") else "")
+
+                    key = f"{h_name.lower()}_vs_{a_name.lower()}_{date_str}"
                     with lock:
                         if key not in seen_match_keys:
                             seen_match_keys.add(key)
@@ -460,23 +514,28 @@ def fetch_football_matches(limit: int = 8) -> list:
                                 "league": league_display,
                                 "home": h_name,
                                 "away": a_name,
-                                "home_score": str(h_score or "0"),
-                                "away_score": str(a_score or "0"),
-                                "status": "FT",
-                                "state": "post",
+                                "home_score": str(h_score),
+                                "away_score": str(a_score),
+                                "status": detail,
+                                "state": state,
                                 "date": date_str,
-                                "detail": f"Full Time ({date_str})",
+                                "detail": f"Full Time ({date_str})" if state == "post" else detail,
                                 "is_priority": True,
-                                "home_logo": home.get("team", {}).get("logo", ""),
-                                "away_logo": away.get("team", {}).get("logo", ""),
+                                "home_logo": h_logo,
+                                "away_logo": a_logo,
                                 "url": f"https://www.espn.com/soccer/team/_/id/{tid}",
                             })
         except Exception:
             pass
 
     threads = []
-    for l, u in leagues:
-        threads.append(threading.Thread(target=_fetch_league, args=(l, u), daemon=True))
+    # Concurrently harvest today's matchday, tomorrow's fixtures, and yesterday's scores
+    for l_name, l_code in leagues:
+        threads.append(threading.Thread(target=_fetch_league_scoreboard, args=(l_name, l_code, today_str), daemon=True))
+        threads.append(threading.Thread(target=_fetch_league_scoreboard, args=(l_name, l_code, tomorrow_str), daemon=True))
+        threads.append(threading.Thread(target=_fetch_league_scoreboard, args=(l_name, l_code, yesterday_str), daemon=True))
+
+    # Concurrently harvest priority team schedules
     for t_name, l, tid in PRIORITY_TEAM_IDS:
         threads.append(threading.Thread(target=_fetch_team_schedule, args=(t_name, l, tid), daemon=True))
 
@@ -485,42 +544,57 @@ def fetch_football_matches(limit: int = 8) -> list:
     for t in threads:
         t.join(timeout=3.8)
 
-    # Check which priority clubs are represented
-    found_clubs = set()
-    for m in harvested:
-        for kw, canonical in PRIORITY_CLUBS.items():
-            if kw in m["home"].lower() or kw in m["away"].lower():
-                found_clubs.add(canonical)
-
-    # Merge 2026 fallback fixtures for any priority clubs not yet in harvested
-    for fb in FALLBACK_FOOTBALL_MATCHES:
-        fb_clubs = set()
-        for kw, canonical in PRIORITY_CLUBS.items():
-            if kw in fb["home"].lower() or kw in fb["away"].lower():
-                fb_clubs.add(canonical)
-        if not fb_clubs.issubset(found_clubs):
-            key = f"{fb['home'].lower()}_vs_{fb['away'].lower()}"
-            if key not in seen_match_keys:
-                seen_match_keys.add(key)
-                harvested.append(dict(fb))
-                found_clubs.update(fb_clubs)
+    # If offline, check last cached real data before falling back
+    if not harvested:
+        try:
+            with _cache_lock:
+                if os.path.exists(CACHE_FILE):
+                    with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                        cached_data = json.load(f)
+                        cached_matches = cached_data.get("football", [])
+                        if cached_matches:
+                            harvested = list(cached_matches)
+        except Exception:
+            pass
 
     if not harvested:
         harvested = list(FALLBACK_FOOTBALL_MATCHES)
 
-    harvested.sort(key=lambda m: (
-        0 if m.get("is_priority") else 1,
-        0 if m.get("state") == "in" else (1 if m.get("state") == "post" else 2)
-    ))
+    # Balanced sorting:
+    # 1. Priority spotlight clubs playing live (0)
+    # 2. Priority spotlight clubs with upcoming fixtures (1)
+    # 3. Any club playing live (2)
+    # 4. Priority clubs with recent finished scores (3)
+    # 5. Other upcoming fixtures (4)
+    # 6. Other recent completed matches (5)
+    def _sort_key(m):
+        st = m.get("state", "pre")
+        prio = 0 if m.get("is_priority") else 1
+        d = m.get("date", "")
+        if prio == 0 and st == "in":
+            return (0, d)
+        elif prio == 0 and st == "pre":
+            return (1, d)
+        elif st == "in":
+            return (2, d)
+        elif prio == 0 and st == "post":
+            return (3, d)
+        elif st == "pre":
+            return (4, d)
+        else:
+            return (5, d)
 
+    harvested.sort(key=_sort_key)
     return harvested[:limit]
 
 
 def fetch_football_news(limit: int = 6) -> list:
-    """Fetch real-time latest breaking football news (BBC Sport & ESPN FC)."""
+    """Fetch real-time latest breaking football news (BBC Sport, ESPN FC, Guardian, Marca)."""
     urls = [
         ("BBC Sport", "http://feeds.bbci.co.uk/sport/football/rss.xml"),
         ("ESPN FC", "https://www.espn.com/espn/rss/soccer/news"),
+        ("The Guardian", "https://www.theguardian.com/football/rss"),
+        ("Marca", "https://e00-marca.uecdn.es/rss/en/football.xml"),
     ]
     articles = []
     seen = set()
@@ -536,8 +610,11 @@ def fetch_football_news(limit: int = 6) -> list:
                 desc = (item.findtext("description") or "").strip()
                 pub = (item.findtext("pubDate") or "").strip()
                 desc = re.sub(r"<[^>]+>", "", desc).strip()
-                if title and title not in seen:
-                    seen.add(title)
+                title = html.unescape(title)
+                desc = html.unescape(desc)
+                title = re.sub(r"\s+", " ", title).strip()
+                if title and title.lower() not in seen and len(title) > 8:
+                    seen.add(title.lower())
                     articles.append({
                         "title": title,
                         "url": link,
@@ -546,22 +623,34 @@ def fetch_football_news(limit: int = 6) -> list:
                         "source": source_name,
                     })
         except Exception as e:
-            print(f"[intel] Football news parse error: {e}")
+            pass
 
-    # Fallback headlines if offline
+    # Fallback headlines if completely offline
+    if not articles:
+        try:
+            with _cache_lock:
+                if os.path.exists(CACHE_FILE):
+                    with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                        cached_data = json.load(f)
+                        cached_news = cached_data.get("football_news", [])
+                        if cached_news:
+                            articles = list(cached_news)
+        except Exception:
+            pass
+
     if not articles:
         articles = [
             {
-                "title": "Arsenal secure statement Champions League victory behind Odegaard masterclass",
+                "title": "Champions League and Domestic League fixtures headline 2026/27 campaign",
                 "url": "https://www.bbc.com/sport/football",
-                "description": "Mikel Arteta praises squad maturity as European campaign advances.",
+                "description": "European football leagues in full swing with continental fixtures underway.",
                 "date": "Sep 2026",
                 "source": "BBC Sport",
             },
             {
-                "title": "Real Madrid and Barcelona battle for early La Liga supremacy",
+                "title": "Real Madrid, Barcelona, Arsenal and Manchester City compete for title race supremacy",
                 "url": "https://www.espn.com/soccer",
-                "description": "Tactical analysis of Spanish giants heading into the weekend derby.",
+                "description": "Tactical analysis and weekend match previews across top European competitions.",
                 "date": "Sep 2026",
                 "source": "ESPN FC",
             },
@@ -753,9 +842,19 @@ def generate_spoken_intel(data: dict, lang: str = "en") -> str:
                 for fn in football_news[:3]:
                     parts.append(f"{fn['title']}।")
             if football:
-                for m in football[:3]:
-                    parts.append(f"{m['home']} এবং {m['away']} ম্যাচের স্কোর {m['home_score']}-{m['away_score']} ({m['status']})।")
-            parts.append("ফুটবলের ২০২৬ ফিক্সচার ও লাইভ স্কোর কনসোলে প্রদর্শিত হচ্ছে, স্যার।")
+                live_m = [m for m in football if m.get("state") == "in"]
+                post_m = [m for m in football if m.get("state") == "post"]
+                pre_m = [m for m in football if m.get("state") == "pre"]
+                if live_m:
+                    for m in live_m[:2]:
+                        parts.append(f"চলমান খেলায় {m['home']} {m['home_score']}, {m['away']} {m['away_score']} ({m['status']})।")
+                if post_m:
+                    for m in post_m[:2]:
+                        parts.append(f"{m['home']} ও {m['away']} ম্যাচের ফলাফল {m['home_score']}-{m['away_score']} ({m['status']})।")
+                if pre_m:
+                    for m in pre_m[:2]:
+                        parts.append(f"আসন্ন ম্যাচে {m['home']} মুখোমুখি হবে {m['away']} এর ({m['status']})।")
+            parts.append("ফুটবলের ফিক্সচার ও লাইভ স্কোর কনসোলে প্রদর্শিত হচ্ছে, স্যার।")
             return " ".join(parts)
 
         # English Football / Sports Briefing
@@ -765,22 +864,41 @@ def generate_spoken_intel(data: dict, lang: str = "en") -> str:
             for fn in football_news[:3]:
                 parts.append(f"{fn['title']}.")
         if football:
-            parts.append("On the pitch:")
-            match_summaries = []
-            for m in football[:4]:
-                h, a = m["home"], m["away"]
-                hs, as_ = m["home_score"], m["away_score"]
-                st = m.get("status", "FT")
-                try:
-                    if int(hs) > int(as_):
-                        match_summaries.append(f"{h} defeated {a} {hs} to {as_}")
-                    elif int(hs) < int(as_):
-                        match_summaries.append(f"{a} secured victory over {h} {as_} to {hs}")
-                    else:
-                        match_summaries.append(f"{h} and {a} concluded in a {hs}-{as_} draw")
-                except Exception:
-                    match_summaries.append(f"{h} {hs}, {a} {as_} ({st})")
-            parts.append("; ".join(match_summaries) + ".")
+            live_m = [m for m in football if m.get("state") == "in"]
+            post_m = [m for m in football if m.get("state") == "post"]
+            pre_m = [m for m in football if m.get("state") == "pre"]
+
+            if live_m:
+                parts.append("On the pitch, in live action:")
+                live_summaries = []
+                for m in live_m[:2]:
+                    live_summaries.append(f"{m['home']} {m['home_score']}, {m['away']} {m['away_score']} ({m['status']})")
+                parts.append("; ".join(live_summaries) + ".")
+
+            if post_m:
+                parts.append("On the pitch, recent final scores:" if not live_m else "Recent final scores:")
+                post_summaries = []
+                for m in post_m[:3]:
+                    h, a = m["home"], m["away"]
+                    hs, as_ = m["home_score"], m["away_score"]
+                    try:
+                        if int(hs) > int(as_):
+                            post_summaries.append(f"{h} defeated {a} {hs} to {as_}")
+                        elif int(hs) < int(as_):
+                            post_summaries.append(f"{a} defeated {h} {as_} to {hs}")
+                        else:
+                            post_summaries.append(f"{h} and {a} finished in a {hs}-{as_} draw")
+                    except Exception:
+                        post_summaries.append(f"{h} {hs}, {a} {as_}")
+                parts.append("; ".join(post_summaries) + ".")
+
+            if pre_m:
+                parts.append("In upcoming fixtures:" if (live_m or post_m) else "On the pitch, upcoming fixtures:")
+                pre_summaries = []
+                for m in pre_m[:3]:
+                    pre_summaries.append(f"{m['home']} faces {m['away']} ({m.get('status', 'Scheduled')})")
+                parts.append("; ".join(pre_summaries) + ".")
+
         parts.append("Live 2026/27 fixtures and football intelligence cards are active on your console, Sir.")
         return " ".join(parts)
 
@@ -857,7 +975,13 @@ def generate_spoken_intel(data: dict, lang: str = "en") -> str:
             parts.append(f"ক্রিপ্টো বাজারে বিটকয়েন বর্তমানে {btc['price']} ডলারে লেনদেন হচ্ছে, যা {abs(btc['change_24h'])} শতাংশ {sign}ছে।")
         if football:
             prio_f = next((m for m in football if m.get("is_priority")), football[0])
-            parts.append(f"ফুটবল আপডেটে: {prio_f['home']} এবং {prio_f['away']} ম্যাচের স্কোর {prio_f['home_score']}-{prio_f['away_score']} ({prio_f['status']})।")
+            st = prio_f.get("status", "FT")
+            if prio_f.get("state") == "in":
+                parts.append(f"ফুটবলে লাইভ ম্যাচ: {prio_f['home']} {prio_f['home_score']}-{prio_f['away_score']} {prio_f['away']} ({st})।")
+            elif prio_f.get("state") == "post":
+                parts.append(f"ফুটবল আপডেটে: {prio_f['home']} এবং {prio_f['away']} ম্যাচের স্কোর {prio_f['home_score']}-{prio_f['away_score']} ({st})।")
+            else:
+                parts.append(f"ফুটবলের আসন্ন ম্যাচে {prio_f['home']} মুখোমুখি হবে {prio_f['away']} এর ({st})।")
         if football_news:
             parts.append(f"ফুটবলের শীর্ষ সংবাদ: {football_news[0]['title']}।")
         if weather_info.get("temp"):
