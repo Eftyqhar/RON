@@ -69,6 +69,7 @@ _snapshot = {
     "telegram": {},
     "netradar": {},
     "docintel": {},
+    "clean_slate": {},
     "language": "en",
 }
 
@@ -438,6 +439,13 @@ def docintel(**values):
         snap_val.pop("event", None)
         _snapshot["docintel"] = snap_val
     _emit("docintel", {"docintel": values})
+
+
+def clean_slate(**values):
+    """Publish the state of the Clean Slate Workspace Auto-Organizer for the HUD."""
+    with _lock:
+        _snapshot["clean_slate"] = dict(values)
+    _emit("clean_slate", {"clean_slate": values})
 
 
 

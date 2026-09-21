@@ -25,6 +25,7 @@ import intel
 import tribune
 import telegram_bridge
 import netradar
+import clean_slate
 import docintel
 import voice
 from voice import speak, listen
@@ -126,8 +127,16 @@ Tools:
 23. Weather Station:  {"tool": "get_weather_station", "location": "optional city"}
 24. Cyber Watchdog:   {"tool": "scan_network", "fast": true}
 25. Document Intel:   {"tool": "doc_intel", "action": "summarize|ask|extract_tables|open", "query": "optional question or calculation", "file_path": "optional path"}
+26. Clean Slate:      {"tool": "clean_slate", "target": "downloads|documents|desktop"}
 
 Rules:
+- clean downloads / organize documents / clean slate / tidy desktop / sort files → clean_slate, examples:
+    "organize document folder" → {"tool": "clean_slate", "target": "documents"}
+    "clean documents" → {"tool": "clean_slate", "target": "documents"}
+    "clean downloads" → {"tool": "clean_slate", "target": "downloads"}
+    "organize my downloads" → {"tool": "clean_slate", "target": "downloads"}
+    "clean slate" → {"tool": "clean_slate", "target": "downloads"}
+    "clean my desktop" → {"tool": "clean_slate", "target": "desktop"}
 - summarize this pdf / analyze document / extract tables from pdf / what does section X say / calculate total expenses in bank statement → doc_intel, examples:
     "summarize this pdf" → {"tool": "doc_intel", "action": "summarize"}
     "what does section 4 say about warranty" → {"tool": "doc_intel", "action": "ask", "query": "what does section 4 say about warranty"}
@@ -2630,6 +2639,50 @@ def handle_docintel(data: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Clean Slate Workspace & Downloads Auto-Organizer
+# ---------------------------------------------------------------------------
+
+def extract_clean_slate(command: str) -> dict | None:
+    """Classify a Clean Slate downloads/documents/desktop organization request, or return None."""
+    text = (command or "").strip()
+    if not text:
+        return None
+    low = text.lower()
+
+    # English patterns:
+    # "clean slate", "organize document folder", "organize documents", "clean documents folder",
+    # "clean downloads", "organize downloads", "clean my downloads", "tidy downloads", "sort downloads"
+    # "clean desktop", "organize desktop", "clean my desktop", "tidy desktop", "sort desktop"
+    if re.search(r"\b(?:clean\s+slate|declutter\s+(?:my\s+)?(?:downloads?|documents?|desktop|files?)|tidy\s+(?:up\s+)?(?:my\s+)?(?:downloads?|documents?|desktop|files?)(?:\s+folder)?|organize\s+(?:my\s+)?(?:downloads?|documents?|desktop|files?)(?:\s+folder)?|sort\s+(?:my\s+)?(?:downloads?|documents?|desktop|files?)(?:\s+folder)?|clean\s+(?:up\s+)?(?:my\s+)?(?:downloads?|documents?|desktop)(?:\s+folder)?)\b", low):
+        if "document" in low or "doc" in low:
+            target = "documents"
+        elif "desktop" in low:
+            target = "desktop"
+        else:
+            target = "downloads"
+        return {"target": target}
+
+    # Bengali patterns: "ডকুমেন্ট ফোল্ডার পরিষ্কার করো", "ডকুমেন্ট সাজাও", "ডাউনলোড ফোল্ডার পরিষ্কার করো", "ডেস্কটপ পরিষ্কার করো"
+    if any(w in text for w in ["পরিষ্কার করো", "পরিষ্কার", "সাজাও", "গোছাও"]):
+        if any(w in text for w in ["ডকুমেন্ট", "দলিল", "কাগজপত্র"]):
+            return {"target": "documents"}
+        if "ডেস্কটপ" in text:
+            return {"target": "desktop"}
+        if any(w in text for w in ["ডাউনলোড", "ফাইল"]):
+            return {"target": "downloads"}
+
+    return None
+
+
+def handle_clean_slate(data: dict) -> str:
+    """Execute Clean Slate directory organization and return spoken response."""
+    target = data.get("target", "downloads")
+    lang = bus.get_language()
+    res = clean_slate.organize_directory(target=target, dry_run=False, lang=lang)
+    return res.get("spoken", "Clean slate complete, Sir.")
+
+
+# ---------------------------------------------------------------------------
 # Email sending
 # ---------------------------------------------------------------------------
 
@@ -3528,6 +3581,13 @@ def _process_command(user_input: str):
         speak(reply)
         return
 
+    # Clean Slate Workspace Auto-Organizer, answered directly
+    cs_cmd = extract_clean_slate(user_input)
+    if cs_cmd:
+        reply = handle_clean_slate(cs_cmd)
+        speak(reply)
+        return
+
     conversation_history.append({"role": "user", "content": user_input})
     _trim_context()   # bound the request we are about to send
 
@@ -3659,6 +3719,8 @@ def _process_command(user_input: str):
             result = handle_tribune(data)
         elif tool in ("doc_intel", "docintel", "document_intelligence"):
             result = handle_docintel(data)
+        elif tool in ("clean_slate", "clean_downloads", "organize_downloads"):
+            result = handle_clean_slate(data)
         else:
             result = "Unknown tool requested."
 
