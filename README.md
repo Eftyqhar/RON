@@ -34,6 +34,8 @@ It combines real-time speech recognition (Google Speech-to-Text), offline text-t
 
 | Feature | Description |
 |---|---|
+| 🧹 **Clean Slate (Auto-Organizer)** | Zero-loss autonomous workspace & file auto-organizer for `Downloads`, `Documents`, and `Desktop` (`clean_slate.py`). Context-aware categorization (PDFs, Word Docs, Spreadsheets, Presentations, Images, Archives, Code), non-destructive collision renaming, and stale installer warnings. Zero GPU required. |
+| 🔊 **Cinematic Stark Audio FX Engine** | High-tech mechanical & acoustic sound design (`sfx.py`) synthesized procedurally in-memory on CPU (0% GPU). Holographic hum on HUD startup, Iron Man suit servo on protocol shifts, and crystalline sonar ping on radar discoveries. Plays non-blocking over dedicated channels without interrupting TTS. |
 | 📰 **The RON World Tribune** | Autonomous daily AI newspaper editor: concurrently harvests 50+ feeds across 6 desks, deduplicates stories, compiles Victorian/Modern broadsheet PDF to Documents, delivers 3-min executive audio broadcast, and HUD broadsheet reader modal (`Ctrl + Shift + T`). Zero GPU required. |
 | 📱 **RON Pocket Uplink (Telegram)** | Two-way remote command center via Telegram bot. Talk to RON from smartphone anywhere: `/status` telemetry, `/screenshot` desktop capture, `/research <topic>` with automatic PDF upload, `/tribune` delivery, `/lock` PC, and full conversational AI. Secure PIN pairing (`/pair <PIN>`). |
 | 📁 **RON-Share (Mobile Drop & Sync)** | Bi-directional phone-to-PC file transfer via Telegram (`/share`, `\share`). Drop docs, photos, audio to store in `Documents\RON-Share`. Query stats, list files (`/share list`), retrieve files to phone (`/share get <id>`), or launch Windows Explorer (`/share open`). |
@@ -514,6 +516,42 @@ A real-time local Wi-Fi subnet radar and workstation vulnerability auditor opera
 - **🛡️ Workstation Port Security Audit:** Checks critical and vulnerable ports (21 FTP, 23 Telnet, 80 HTTP, 135 RPC, 139 NetBIOS, 445 SMB, 3389 RDP, 8080/8888 dev servers) and assesses firewall posture.
 - **📱 Telegram Remote Radar:** Trigger perimeter sweeps remotely from anywhere via `/netscan` or `/radar` on your paired smartphone!
 - **⚡ Interactive Trust Management:** Mark unrecognized or new devices as trusted directly from the HUD UI with a single click.
+
+---
+
+### 🧹 Clean Slate (Autonomous Workspace Auto-Organizer)
+An autonomous, zero-data-loss organization engine for your `Downloads`, `Documents`, and `Desktop` directories operating with **0% GPU overhead**. Intelligently tidies cluttered folders, separates files into structured subdirectories, avoids overwriting, and alerts you to obsolete setup files.
+
+| Say This | What Happens |
+|---|---|
+| *"Clean my downloads"* / *"Organize downloads"* / *"Clean slate"* | Autonomously categorizes downloads root into `Documents/`, `Images/`, `Archives/`, `Installers/`, `Audio/`, `Video/`, `Code/` |
+| *"Organize document folder"* / *"Clean documents"* | Intelligently sorts documents into context-aware subfolders: `PDFs/`, `Word Documents/`, `Spreadsheets/`, `Presentations/`, `Notes & Text/` |
+| *"Clean desktop"* / *"Organize my desktop"* | Categorizes desktop clutter while strictly preserving `.lnk`, `.url` shortcuts and `desktop.ini` |
+| *"ডাউনলোড ফোল্ডার পরিষ্কার করো"* / *"ডকুমেন্ট ফোল্ডার গোছাও"* | Bengali voice command: sorts the specified folder and provides a verbal Bengali status debrief |
+
+#### 🌟 Key Capabilities
+- **🛡️ Collision-Proof Renaming:** Never overwrites files. If `report.pdf` already exists in destination, automatically saves as `report (1).pdf`.
+- **⏳ Skips In-Progress Downloads:** Automatically ignores `.crdownload`, `.part`, `.tmp`, and `.download` files.
+- **📦 Stale Setup Sentinel:** Scans for installer packages (`.exe`, `.msi`) older than 14 days and reports how much recoverable disk space they consume.
+- **🔊 Acoustic Feedback:** Automatically triggers Iron Man servo sound on start and radar sonar ping on completion.
+
+---
+
+### 🔊 Cinematic Stark Sci-Fi Audio FX Engine
+A 100% CPU procedural acoustic and mechanical sound design engine (`sfx.py`) with **0% GPU requirement**. Generates high-fidelity WAV sound effects in-memory using standard library math (`math`, `struct`, `wave`) in <10ms and plays them non-blocking on dedicated `pygame.mixer` channels.
+
+| Sound Effect | Profile & Acoustic Design | Trigger Event |
+|---|---|---|
+| **Holographic HUD Hum** (`hud_hum`) | 75 Hz sub-bass carrier with 8 Hz amplitude modulation and smooth 1.25s exponential fade | Opening the HUD interface (`open_ui()`) or browser SSE stream connection |
+| **Iron Man Suit Servo** (`servo`) | Exponential frequency sweep rising from 160 Hz to 860 Hz with metallic mechanical harmonics | Switching workstation routines via **Work**, **Gaming**, or **Study** protocols |
+| **Sci-Fi Sonar Ping** (`sonar`) | High-Q crystalline impulse at 1450 Hz with a delayed echo return ping (+0.22s, 1800 Hz) | When Cyber Watchdog (`netradar.py`) detects active or rogue perimeter devices |
+| **Protocol Zero Lockdown** (`lockdown`) | Dual-tone descending heavy security clamp (440 Hz -> 180 Hz) with industrial impact | Activating Emergency **Protocol Zero** workstation lock |
+| **Interface Click** (`click`) | Ultra-fast 60ms micro-chirp for tactile command acknowledgement | Command confirmation and button interactions |
+
+#### 🌟 Key Capabilities
+- **⚡ Zero GPU & Zero Binary Assets:** No heavy `.mp3` or `.wav` files committed to repository. Everything is generated procedurally in-memory.
+- **🎶 Non-Blocking Independent Audio Channels:** Employs `pygame.mixer.Sound` on independent channels so sound effects never interrupt or clip Neural Edge-TTS speech output.
+- **🚀 Sub-Millisecond Preloading:** Sounds are pre-synthesized into memory on startup (`sfx.preload_all()`) for instant, lag-free playback.
 
 ---
 
@@ -1586,6 +1624,8 @@ Academy revision used in Bangladesh.
 - [x] The RON World Tribune: 50+ source concurrent harvester, broadsheet PDF, and 3-min audio broadcast
 - [x] Live Intel Briefing Radio ("RON World Report") with crypto ticker & sports wire
 - [x] Atmospheric Weather Station with 5-day forecast radar console
+- [x] Cinematic Stark Sci-Fi Audio FX Engine (procedural CPU synthesis, 0% GPU)
+- [x] "Clean Slate" Autonomous Workspace & File Auto-Organizer (Downloads, Documents, Desktop)
 - [ ] Cross-platform support (Linux/macOS TTS via `pyttsx3`)
 - [ ] Plugin system for custom user tools
 
