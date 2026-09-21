@@ -21,6 +21,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import bus
+import sfx
 
 WHITELIST_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "network_whitelist.json")
 
@@ -411,9 +412,12 @@ def scan_network(fast: bool = True) -> Dict[str, Any]:
 
         bus.netradar(**result)
         if len(rogue_devices) > 0:
+            sfx.play("sonar", volume=0.85)
             rogue_names = ", ".join([d["vendor"] for d in rogue_devices[:2]])
             bus.activity(f"⚠️ Radar Alert: {len(rogue_devices)} unknown device(s) on Wi-Fi ({rogue_names})", "fail")
         else:
+            if len(devices) > 0:
+                sfx.play("sonar", volume=0.55, debounce_s=10.0)
             bus.activity(f"Radar sweep complete: {len(devices)} active devices verified", "ok")
 
         return result

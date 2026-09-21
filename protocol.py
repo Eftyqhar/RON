@@ -25,6 +25,7 @@ import threading
 import time
 
 import bus
+import sfx
 import tools
 import volume
 
@@ -196,6 +197,12 @@ def execute_protocol(protocol_name: str, lang: str = "en") -> dict:
     bus.set_state(bus.EXECUTING, f"INITIATING {p_name}")
     bus.activity(f"Starting {p_name}", "pending")
     bus.protocol(id=key, name=p_name, status="executing", steps=[])
+
+    # Cinematic Sci-Fi Audio FX: Iron Man servo for operational protocols, lockdown klaxon for Protocol Zero
+    if key == "lockdown":
+        sfx.play("lockdown")
+    else:
+        sfx.play("servo")
 
     # 1. Volume adjustment
     if proto.get("volume_mute"):

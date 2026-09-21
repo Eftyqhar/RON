@@ -34,6 +34,7 @@ import history
 import intel
 import memory
 import researcher
+import sfx
 import telegram_bridge
 import netradar
 import docintel
@@ -369,6 +370,7 @@ class Handler(BaseHTTPRequestHandler):
         read-until-close mode, which is what an open-ended stream needs.
         """
         q = bus.subscribe()
+        sfx.play("hud_hum", debounce_s=8.0)
         try:
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -789,6 +791,7 @@ def _chromium_exe():
 
 
 def open_ui(url, mode):
+    sfx.play("hud_hum", debounce_s=8.0)
     if mode == "none":
         return
     if mode == "app":
@@ -860,6 +863,7 @@ def serve(argv=None):
 
     bus.set_state(bus.IDLE, "SYSTEM READY")
     bus.activity("HUD server started", "ok")
+    sfx.preload_all()
     probe_hardware()
     if hasattr(ron, "start_focus_monitor"):
         ron.start_focus_monitor()
