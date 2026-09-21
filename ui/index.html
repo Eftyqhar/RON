@@ -76,6 +76,21 @@
 <div class="layer scan-sweep" aria-hidden="true"></div>
 <div class="layer vignette" aria-hidden="true"></div>
 
+<!-- ══ STARK LASER DIAGNOSTIC SWEEP (0% GPU Pure 2D CSS & Sound) ════ -->
+<div id="laser-diagnostic-layer" class="laser-diagnostic-layer" aria-hidden="true">
+  <div id="laser-diagnostic-beam" class="laser-diagnostic-beam">
+    <div class="laser-beam-core"></div>
+    <div class="laser-beam-curtain"></div>
+    <div class="laser-beam-flare-left"></div>
+    <div class="laser-beam-flare-right"></div>
+    <div class="laser-beam-readout mono micro">
+      <span class="laser-bracket">[</span>
+      <span class="laser-tag">DIAGNOSTIC SWEEP // <b id="laser-readout-phase">CALIBRATING</b></span>
+      <span class="laser-bracket">]</span>
+    </div>
+  </div>
+</div>
+
 <div id="stage">
 
   <!-- ══ TOP BAR ══════════════════════════════════════════════════════ -->
@@ -135,7 +150,7 @@
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 1.5A1.5 1.5 0 0 0 2.5 3v10A1.5 1.5 0 0 0 4 14.5h8a1.5 1.5 0 0 0 1.5-1.5V6L9 1.5H4z" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M8.5 1.5V6H13M5 8.5h6M5 11h4" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
         <span id="chip-doc-label">DOC INTEL</span>
       </div>
-      <div class="chip" id="chip-sys" data-ok="unknown">
+      <div class="chip" id="chip-sys" data-ok="unknown" role="button" tabindex="0" title="Run Stark Laser Diagnostic Sweep (Ctrl+Shift+L)">
         <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.2" y="2.2" width="11.6" height="11.6" rx="1.6"/><rect x="6" y="6" width="4" height="4" rx="0.6"/></svg>
         <span id="chip-sys-label">CORE</span>
       </div>

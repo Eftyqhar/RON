@@ -150,6 +150,120 @@ html, body {
   100% { transform: translateY(100vh); opacity: 0; }
 }
 
+/* ═══ STARK LASER DIAGNOSTIC SWEEP (0% GPU Pure 2D CSS) ═══════════════ */
+
+.laser-diagnostic-layer {
+  position: fixed; inset: 0; pointer-events: none; z-index: 998;
+  overflow: hidden; display: none;
+}
+.laser-diagnostic-layer.active {
+  display: block;
+}
+
+.laser-diagnostic-beam {
+  position: absolute; left: 0; right: 0; height: 3px; top: 0;
+  transform: translateY(-160px);
+  will-change: transform, opacity;
+}
+
+.laser-diagnostic-layer.active .laser-diagnostic-beam {
+  animation: laserDiagnosticSweep 1.6s cubic-bezier(0.22, 0.05, 0.28, 1.0) forwards;
+}
+
+.laser-beam-core {
+  position: absolute; top: 0; left: 0; right: 0; height: 2.5px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(var(--accent-rgb), 0.4) 8%,
+    var(--accent) 25%,
+    #FFFFFF 50%,
+    var(--accent) 75%,
+    rgba(var(--accent-rgb), 0.4) 92%,
+    transparent 100%);
+  box-shadow:
+    0 0 4px #FFFFFF,
+    0 0 12px var(--accent-bright),
+    0 0 28px rgba(var(--accent-rgb), 0.95),
+    0 0 60px rgba(var(--accent-rgb), 0.65);
+}
+
+.laser-beam-curtain {
+  position: absolute; bottom: 2.5px; left: 0; right: 0; height: 140px;
+  background: linear-gradient(to top,
+    rgba(var(--accent-rgb), 0.28) 0%,
+    rgba(var(--accent-rgb), 0.12) 35%,
+    rgba(var(--accent-rgb), 0.02) 75%,
+    transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 6%, #000 94%, transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 6%, #000 94%, transparent 100%);
+}
+
+.laser-beam-flare-left, .laser-beam-flare-right {
+  position: absolute; top: -5px; width: 12px; height: 12px;
+  border-radius: 50%; background: #FFFFFF;
+  box-shadow: 0 0 16px var(--accent-bright), 0 0 32px var(--accent);
+}
+.laser-beam-flare-left { left: 8px; }
+.laser-beam-flare-right { right: 8px; }
+
+.laser-beam-readout {
+  position: absolute; right: 42px; bottom: 10px;
+  color: var(--accent-bright);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-shadow: 0 0 8px rgba(var(--accent-rgb), 0.85);
+  display: flex; align-items: center; gap: 6px;
+  user-select: none;
+}
+.laser-beam-readout .laser-bracket { color: var(--text-mid); font-weight: 300; }
+.laser-beam-readout .laser-tag b { color: #FFFFFF; text-shadow: 0 0 10px var(--accent-bright); }
+
+@keyframes laserDiagnosticSweep {
+  0% {
+    transform: translateY(-160px);
+    opacity: 0;
+  }
+  3% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(calc(100vh + 80px));
+    opacity: 0;
+  }
+}
+
+/* Panel edge flash and telemetry digit roll-up highlights */
+body.diagnostic-sweeping .panel.panel-laser-hit {
+  border-color: var(--accent-bright) !important;
+  box-shadow:
+    inset 0 0 24px rgba(var(--accent-rgb), 0.32),
+    0 0 30px rgba(var(--accent-rgb), 0.45) !important;
+  transition: border-color 0.1s ease, box-shadow 0.1s ease;
+}
+
+.meter.rolling b {
+  color: var(--accent-bright) !important;
+  text-shadow: 0 0 10px var(--accent-bright), 0 0 20px rgba(var(--accent-rgb), 0.8) !important;
+}
+.meter.rolling .fill {
+  filter: brightness(1.4);
+  box-shadow: 0 0 10px var(--accent);
+}
+#chip-sys.diagnostic-active {
+  color: var(--accent-bright);
+  border-color: var(--accent-bright);
+  box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.8);
+  animation: chipPulse 0.4s ease-in-out infinite alternate;
+}
+@keyframes chipPulse {
+  0% { opacity: 0.7; }
+  100% { opacity: 1; filter: brightness(1.3); }
+}
+
 /* ═══ STAGE GRID ══════════════════════════════════════════════════════ */
 
 #stage {

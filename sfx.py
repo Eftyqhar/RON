@@ -248,6 +248,69 @@ def generate_click_bytes() -> bytes:
     return _write_wav_mono(samples, sr)
 
 
+def generate_diagnostic_bytes() -> bytes:
+    """Synthesize Stark Diagnostic Laser Sweep: Capacitor Whine + Suit Servo Chime.
+    
+    Sound Design:
+    - 0.00s - 0.42s: High-energy electromagnetic capacitor charging whine,
+      exponential frequency sweep rising from 220 Hz to 2800 Hz with harmonic sheen.
+    - 0.38s - 0.92s: Iron Man suit mechanical servo spin-up and resonance latch
+      descending from 950 Hz to 380 Hz with metallic phase harmonics.
+    - 0.90s - 1.20s: Crisp dual-frequency digital calibration chime (1760 Hz + 2640 Hz)
+      confirming all telemetry systems calibrated and locked.
+    """
+    sr = 44100
+    duration = 1.20
+    total = int(sr * duration)
+    samples = []
+
+    phase_cap = 0.0
+    phase_servo = 0.0
+
+    for i in range(total):
+        t = i / sr
+        val = 0.0
+
+        # Phase 1: Capacitor whine charging up (0.0s - 0.45s)
+        if t <= 0.45:
+            p1 = t / 0.45
+            # Exponential rising pitch curve (220 Hz -> 2800 Hz)
+            freq_cap = 220.0 * ((2800.0 / 220.0) ** (p1 ** 1.5))
+            phase_cap += 2.0 * math.pi * freq_cap / sr
+            # Amplitude envelope: quick swell, then handoff to servo
+            env1 = math.sin(p1 * math.pi) if p1 > 0.8 else min(1.0, p1 * 8.0)
+            whine = (math.sin(phase_cap) + 
+                     0.35 * math.sin(phase_cap * 2.0) + 
+                     0.15 * math.sin(phase_cap * 3.0)) * env1
+            val += whine * 14000.0
+
+        # Phase 2: Iron Man Suit Servo Latch (0.35s - 0.95s)
+        if 0.35 <= t <= 0.95:
+            t_s = t - 0.35
+            dur_s = 0.60
+            p2 = t_s / dur_s
+            freq_servo = 950.0 - (570.0 * (p2 ** 0.85))
+            phase_servo += 2.0 * math.pi * freq_servo / sr
+            # Envelope: smooth attack crossover, mechanical decay
+            env2 = math.sin(p2 * math.pi)
+            servo = (math.sin(phase_servo) + 
+                     0.4 * math.sin(phase_servo * 2.5) +
+                     0.2 * math.sin(phase_servo * 4.0)) * env2
+            val += servo * 16000.0
+
+        # Phase 3: Digital Calibration Lock Chime (0.88s - 1.20s)
+        if t >= 0.88:
+            t_c = t - 0.88
+            env3 = math.exp(-12.0 * t_c)
+            chime1 = math.sin(2.0 * math.pi * 1760.0 * t_c)
+            chime2 = 0.5 * math.sin(2.0 * math.pi * 2640.0 * t_c)
+            val += (chime1 + chime2) * env3 * 15000.0
+
+        samples.append(val)
+
+    return _write_wav_mono(samples, sr)
+
+
 # ---------------------------------------------------------------------------
 # Sound Cache & Playback Management
 # ---------------------------------------------------------------------------
@@ -258,6 +321,7 @@ GENERATORS = {
     "sonar": generate_sonar_ping_bytes,
     "lockdown": generate_lockdown_bytes,
     "click": generate_click_bytes,
+    "diagnostic": generate_diagnostic_bytes,
 }
 
 

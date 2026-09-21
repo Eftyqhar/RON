@@ -324,6 +324,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._docintel_ask()
         if path == "/api/docintel/export":
             return self._docintel_export()
+        if path == "/api/diagnostic":
+            return self._diagnostic()
         return self._json(404, {"error": "not found"})
 
     def _static(self, path):
@@ -740,6 +742,21 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {"ok": True, "files": exported, "count": len(exported)})
         except Exception as e:
             return self._json(500, {"error": f"Export failed: {e}"})
+
+    def _diagnostic(self):
+        """Trigger Stark Laser Diagnostic Sweep on-demand from HUD."""
+        sfx.play("diagnostic", debounce_s=1.0)
+        metrics = {}
+        if psutil:
+            try:
+                metrics["cpu"] = psutil.cpu_percent(interval=None)
+                metrics["ram"] = psutil.virtual_memory().percent
+                metrics["disk"] = psutil.disk_usage(_drive_root()).percent
+            except Exception:
+                pass
+        bus.diagnostic(active=True, **metrics)
+        bus.activity("Stark Laser Diagnostic Sweep engaged", "accent")
+        return self._json(200, {"ok": True, "metrics": metrics})
 
 
 

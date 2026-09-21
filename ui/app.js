@@ -119,7 +119,12 @@ function setMeter(id, value) {
   fill.style.width = `${v}%`;
 }
 
+let latestMetrics = { cpu: 18, ram: 42, disk: 50, net_down: 0.0, net_up: 0.0, uptime: 0 };
+let isDiagnosticSweeping = false;
+
 function applyMetrics(m) {
+  Object.assign(latestMetrics, m);
+  if (isDiagnosticSweeping) return; // do not snap values while numbers are rolling up
   if ('cpu' in m) setMeter('meter-cpu', m.cpu);
   if ('ram' in m) setMeter('meter-ram', m.ram);
   if ('gpu' in m) setMeter('meter-gpu', m.gpu);
@@ -131,6 +136,160 @@ function applyMetrics(m) {
     $('uptime').textContent =
       `${pad2(Math.floor(s / 3600))}:${pad2(Math.floor(s / 60) % 60)}:${pad2(s % 60)}`;
   }
+}
+
+/* ── stark laser diagnostic sweep (0% GPU pure 2d css) ─────────────────── */
+
+function triggerLaserDiagnostic(data = {}) {
+  if (isDiagnosticSweeping) return;
+  isDiagnosticSweeping = true;
+
+  // If invoked via UI shortcut/click, request server to trigger audio & broadcast
+  if (data.fromServer !== true) {
+    fetch('/api/diagnostic', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    }).catch(() => {});
+  }
+
+  const layer = $('laser-diagnostic-layer');
+  const chipSys = $('chip-sys');
+  const phaseLabel = $('laser-readout-phase');
+  const coreState = $('core-state');
+  const coreDetail = $('core-detail');
+
+  if (chipSys) chipSys.classList.add('diagnostic-active');
+  document.body.classList.add('diagnostic-sweeping');
+  if (layer) {
+    layer.classList.remove('active');
+    void layer.offsetWidth; // force DOM reflow to restart CSS keyframes
+    layer.classList.add('active');
+  }
+
+  if (phaseLabel) phaseLabel.textContent = 'INITIALIZING';
+  if (coreState) coreState.textContent = 'DIAGNOSTIC';
+  if (coreDetail) coreDetail.textContent = 'TELEMETRY CALIBRATION SWEEP';
+
+  // Panels react with neon edge flare as the laser beam intersects them
+  const panels = [
+    { el: document.querySelector('.panel-left'), delay: 240 },
+    { el: document.querySelector('.panel-right'), delay: 340 },
+    { el: document.querySelector('.core-stage'), delay: 520 },
+    { el: document.querySelector('.panel-weather'), delay: 680 },
+    { el: document.querySelector('.panel-bl'), delay: 960 },
+    { el: document.querySelector('.visualizer'), delay: 1040 },
+    { el: document.querySelector('.panel-br'), delay: 1120 },
+  ];
+
+  panels.forEach(p => {
+    if (!p.el) return;
+    setTimeout(() => {
+      p.el.classList.add('panel-laser-hit');
+      setTimeout(() => p.el.classList.remove('panel-laser-hit'), 450);
+    }, p.delay);
+  });
+
+  // Target metrics for roll up
+  const targetCpu = Number(data.cpu ?? latestMetrics.cpu ?? 18);
+  const targetRam = Number(data.ram ?? latestMetrics.ram ?? 42);
+  const targetDisk = Number(data.disk ?? latestMetrics.disk ?? 55);
+  const targetNetDown = Number(data.net_down ?? latestMetrics.net_down ?? 14.8);
+  const targetNetUp = Number(data.net_up ?? latestMetrics.net_up ?? 6.2);
+
+  const meters = [
+    { id: 'meter-cpu', target: targetCpu },
+    { id: 'meter-ram', target: targetRam },
+    { id: 'meter-disk', target: targetDisk },
+  ];
+
+  // Prime meters at 00%
+  meters.forEach(m => {
+    const el = $(m.id);
+    if (!el) return;
+    el.classList.add('rolling');
+    const num = el.querySelector('b');
+    const fill = el.querySelector('.fill');
+    if (num) num.innerHTML = `00<i>%</i>`;
+    if (fill) fill.style.width = `0%`;
+  });
+
+  const rollStartTime = performance.now();
+  const rollDuration = 1200; // ms
+
+  function animateRollUp(now) {
+    const elapsed = now - rollStartTime;
+    const progress = Math.min(1, elapsed / rollDuration);
+
+    meters.forEach(m => {
+      const el = $(m.id);
+      if (!el) return;
+      const num = el.querySelector('b');
+      const fill = el.querySelector('.fill');
+
+      if (progress < 0.35) {
+        // Scramble phase: flicker rapid cyber random digits
+        const scrambleVal = pad2(Math.floor(Math.random() * 99));
+        if (num) num.innerHTML = `${scrambleVal}<i>%</i>`;
+        if (fill) fill.style.width = `${Math.round(progress * m.target * 0.4)}%`;
+      } else {
+        // Smooth count-up to target metric
+        const ease = (progress - 0.35) / 0.65;
+        const currentVal = Math.round(m.target * ease);
+        const clamped = Math.max(0, Math.min(100, currentVal));
+        if (num) num.innerHTML = `${clamped}<i>%</i>`;
+        if (fill) fill.style.width = `${clamped}%`;
+      }
+    });
+
+    if ($('net-down')) {
+      $('net-down').textContent = (targetNetDown * progress).toFixed(1);
+    }
+    if ($('net-up')) {
+      $('net-up').textContent = (targetNetUp * progress).toFixed(1);
+    }
+
+    if (progress < 1) {
+      requestAnimationFrame(animateRollUp);
+    } else {
+      meters.forEach(m => {
+        const el = $(m.id);
+        if (!el) return;
+        el.classList.remove('rolling');
+        setMeter(m.id, m.target);
+      });
+      if ($('net-down')) $('net-down').textContent = targetNetDown.toFixed(1);
+      if ($('net-up')) $('net-up').textContent = targetNetUp.toFixed(1);
+    }
+  }
+
+  // Start roll-up as the laser enters the telemetry panels
+  setTimeout(() => {
+    if (phaseLabel) phaseLabel.textContent = 'ROLLING TELEMETRY';
+    requestAnimationFrame(animateRollUp);
+  }, 220);
+
+  setTimeout(() => {
+    if (phaseLabel) phaseLabel.textContent = 'TELEMETRY LOCKED';
+  }, 920);
+
+  // Conclude sweep
+  setTimeout(() => {
+    if (layer) layer.classList.remove('active');
+    document.body.classList.remove('diagnostic-sweeping');
+    if (chipSys) chipSys.classList.remove('diagnostic-active');
+    if (phaseLabel) phaseLabel.textContent = 'ALL SYSTEMS NOMINAL';
+    if (coreState) coreState.textContent = 'ONLINE';
+    if (coreDetail) coreDetail.textContent = 'ALL SYSTEMS NOMINAL';
+
+    addActivity({
+      text: `Diagnostic sweep complete: CPU ${Math.round(targetCpu)}%, RAM ${Math.round(targetRam)}%, DISK ${Math.round(targetDisk)}%`,
+      level: 'accent',
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    });
+
+    isDiagnosticSweeping = false;
+  }, 1650);
 }
 
 /* ── weather (panel 05) ─────────────────────────────────────────────────── */
@@ -5259,6 +5418,9 @@ function connect() {
       case 'language':
         applyLanguage(msg.language || 'en');
         break;
+      case 'diagnostic':
+        triggerLaserDiagnostic(Object.assign({ fromServer: true }, msg.diagnostic || {}));
+        break;
     }
   };
 }
@@ -5341,6 +5503,7 @@ document.addEventListener('keydown', (e) => {
   if ((radarUI.open || $('radar-overlay')?.getAttribute('data-status') === 'open' || $('radar-overlay')?.classList.contains('open')) && e.key === 'Escape') { e.preventDefault(); closeRadar(); return; }
   if ((docUI.open || $('docintel-overlay')?.getAttribute('data-status') === 'open' || $('docintel-overlay')?.classList.contains('open')) && e.key === 'Escape') { e.preventDefault(); closeDocIntel(); return; }
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'd' || e.key === 'D')) { e.preventDefault(); toggleDocIntel(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'l' || e.key === 'L')) { e.preventDefault(); triggerLaserDiagnostic(); return; }
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'n' || e.key === 'N')) { e.preventDefault(); toggleRadar(); return; }
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 't' || e.key === 'T')) { e.preventDefault(); toggleTribune(); return; }
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'i' || e.key === 'I')) { e.preventDefault(); toggleIntel(); return; }
@@ -5372,6 +5535,7 @@ if ($('mem-close')) $('mem-close').addEventListener('click', closeMemory);
 if ($('coach-close')) $('coach-close').addEventListener('click', closeCoach);
 if ($('chip-coach')) $('chip-coach').addEventListener('click', toggleCoach);
 if ($('chip-mem')) $('chip-mem').addEventListener('click', toggleMemory);
+if ($('chip-sys')) $('chip-sys').addEventListener('click', () => triggerLaserDiagnostic());
 if ($('pt-close')) $('pt-close').addEventListener('click', closeProtocol);
 if ($('bf-close')) $('bf-close').addEventListener('click', closeBriefing);
 if ($('rs-close')) $('rs-close').addEventListener('click', closeResearch);

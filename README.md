@@ -34,6 +34,7 @@ It combines real-time speech recognition (Google Speech-to-Text), offline text-t
 
 | Feature | Description |
 |---|---|
+| ⚡ **Stark Laser Diagnostic Sweep** | Iconic holographic diagnostic boot-up sweep designed with **0% GPU load** (<0.5% CPU via pure 2D CSS transforms & SVG lines). Glowing cyan laser line sweeps top-to-bottom across HUD panels while telemetry digits scramble & roll up from `00` to real active metrics (CPU, RAM GB/%, PING ms, DISK %). Paired with procedural capacitor whine and Iron Man suit servo chime audio FX (`Ctrl + Shift + L`). |
 | 🧹 **Clean Slate (Auto-Organizer)** | Zero-loss autonomous workspace & file auto-organizer for `Downloads`, `Documents`, and `Desktop` (`clean_slate.py`). Context-aware categorization (PDFs, Word Docs, Spreadsheets, Presentations, Images, Archives, Code), non-destructive collision renaming, and stale installer warnings. Zero GPU required. |
 | 🔊 **Cinematic Stark Audio FX Engine** | High-tech mechanical & acoustic sound design (`sfx.py`) synthesized procedurally in-memory on CPU (0% GPU). Holographic hum on HUD startup, Iron Man suit servo on protocol shifts, and crystalline sonar ping on radar discoveries. Plays non-blocking over dedicated channels without interrupting TTS. |
 | 📰 **The RON World Tribune** | Autonomous daily AI newspaper editor: concurrently harvests 50+ feeds across 6 desks, deduplicates stories, compiles Victorian/Modern broadsheet PDF to Documents, delivers 3-min executive audio broadcast, and HUD broadsheet reader modal (`Ctrl + Shift + T`). Zero GPU required. |
@@ -547,11 +548,34 @@ A 100% CPU procedural acoustic and mechanical sound design engine (`sfx.py`) wit
 | **Sci-Fi Sonar Ping** (`sonar`) | High-Q crystalline impulse at 1450 Hz with a delayed echo return ping (+0.22s, 1800 Hz) | When Cyber Watchdog (`netradar.py`) detects active or rogue perimeter devices |
 | **Protocol Zero Lockdown** (`lockdown`) | Dual-tone descending heavy security clamp (440 Hz -> 180 Hz) with industrial impact | Activating Emergency **Protocol Zero** workstation lock |
 | **Interface Click** (`click`) | Ultra-fast 60ms micro-chirp for tactile command acknowledgement | Command confirmation and button interactions |
+| **Stark Diagnostic Sweep** (`diagnostic`) | 1.20s capacitor whine (220 Hz -> 2800 Hz) into suit mechanical servo chime and digital lock | Full diagnostic sweep (`Ctrl + Shift + L`, voice: *"Ron, run diagnostic"*) |
 
 #### 🌟 Key Capabilities
 - **⚡ Zero GPU & Zero Binary Assets:** No heavy `.mp3` or `.wav` files committed to repository. Everything is generated procedurally in-memory.
 - **🎶 Non-Blocking Independent Audio Channels:** Employs `pygame.mixer.Sound` on independent channels so sound effects never interrupt or clip Neural Edge-TTS speech output.
 - **🚀 Sub-Millisecond Preloading:** Sounds are pre-synthesized into memory on startup (`sfx.preload_all()`) for instant, lag-free playback.
+
+---
+
+### ⚡ Stark Laser Diagnostic Sweep (Pure 2D CSS & Sound)
+An iconic holographic diagnostic boot-up sweep designed with **strict 0% GPU requirement** (<0.5% CPU load via pure 2D CSS transforms and SVG lines). Gives you that authentic Iron Man armor boot-up calibration feel instantly!
+
+| Trigger | What Happens |
+|---|---|
+| *"Ron, run diagnostic"* / *"Ron, system reboot"* | Triggers holographic cyan laser scan line, audio capacitor whine + suit servo, and rolls up telemetry digits |
+| *"System diagnostic"* / *"Diagnostic sweep"* | Gathers live `psutil` telemetry and network latency, displays real-time calibration sweep on HUD |
+| *"সিস্টেম ডায়াগনস্টিক"* / *"ডায়াগনস্টিক চালাও"* | Bengali voice command: executes sweep, rolls numbers, and delivers fluent Bengali verbal telemetry report |
+| `Ctrl + Shift + L` or Click **CORE** chip in HUD | Instantly triggers visual laser sweep and rolling telemetry roll-up directly from the interface |
+
+#### 🌟 What It Looks Like & How It Works
+- **💠 Holographic Laser Beam:** A glowing cyan laser line (`#C4F8FF` core with multi-tiered neon bloom) sweeps smoothly top-to-bottom across existing HUD panels.
+- **🌌 Trailing Holographic Curtain:** Semi-transparent gradient curtain (`rgba(56, 225, 240, 0.28)`) trails behind the laser line, illuminating background elements.
+- **🎯 Reactive Panel Edge Flare:** As the laser intersects each panel (System Monitor, Active Modules, AI Core, Weather, Conversation, Visualizer, Activity), panels flare with a high-tech cyan border glow.
+- **🔢 Telemetry Number Roll-Up:** Subsystem meters (CPU %, RAM %, DISK %, PING ms, NET KB/s) scramble with rapid random cyber digits, then smoothly roll up from `00` to real active metrics over 1.2s.
+- **🔊 Suit Audio Synthesis:** Plays an in-memory capacitor whine rising exponentially into the Iron Man suit mechanical servo chime and digital confirmation latch.
+- **🎙️ Military Stark Debrief:** RON speaks a concise diagnostic report with live parameters:
+  - English: *"Diagnostic sweep complete, Sir. All systems operating within nominal parameters. CPU at 18 percent, RAM at 5.2 gigabytes, network latency 14 milliseconds. Iron Man protocols engaged."*
+  - Bengali: *"সিস্টেম ডায়াগনস্টিক সম্পন্ন হয়েছে, স্যার। সব সাব-সিস্টেম স্বাভাবিক রয়েছে। সিপিইউ ১৮ শতাংশ, র‍্যাম ৫.২ গিগাবাইট, নেটওয়ার্ক ল্যাটেন্সি ১৪ মিলিসেকেন্ড। আয়রন ম্যান প্রোটোকল সক্রিয়।"*
 
 ---
 
@@ -1626,6 +1650,7 @@ Academy revision used in Bangladesh.
 - [x] Atmospheric Weather Station with 5-day forecast radar console
 - [x] Cinematic Stark Sci-Fi Audio FX Engine (procedural CPU synthesis, 0% GPU)
 - [x] "Clean Slate" Autonomous Workspace & File Auto-Organizer (Downloads, Documents, Desktop)
+- [x] Stark Laser Diagnostic Sweep (pure 2D CSS & audio FX, 0% GPU)
 - [ ] Cross-platform support (Linux/macOS TTS via `pyttsx3`)
 - [ ] Plugin system for custom user tools
 

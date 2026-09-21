@@ -70,6 +70,7 @@ _snapshot = {
     "netradar": {},
     "docintel": {},
     "clean_slate": {},
+    "diagnostic": {},
     "language": "en",
 }
 
@@ -145,6 +146,8 @@ def snapshot():
             "telegram": dict(_snapshot.get("telegram", {})),
             "netradar": dict(_snapshot.get("netradar", {})),
             "docintel": dict(_snapshot.get("docintel", {})),
+            "clean_slate": dict(_snapshot.get("clean_slate", {})),
+            "diagnostic": dict(_snapshot.get("diagnostic", {})),
             "language": _snapshot.get("language", "en"),
         }
 
@@ -446,6 +449,17 @@ def clean_slate(**values):
     with _lock:
         _snapshot["clean_slate"] = dict(values)
     _emit("clean_slate", {"clean_slate": values})
+
+
+def diagnostic(**values):
+    """Publish the Stark Laser Diagnostic Sweep event for the HUD.
+
+    Triggers holographic cyan laser scan line, rolls up telemetry digits
+    (00 -> live values), and flashes subsystem panels with 0% GPU load.
+    """
+    with _lock:
+        _snapshot["diagnostic"] = dict(values)
+    _emit("diagnostic", {"diagnostic": values})
 
 
 
