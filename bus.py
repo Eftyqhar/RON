@@ -71,6 +71,7 @@ _snapshot = {
     "docintel": {},
     "clean_slate": {},
     "diagnostic": {},
+    "dhaka_bulletin": {},
     "language": "en",
 }
 
@@ -148,6 +149,7 @@ def snapshot():
             "docintel": dict(_snapshot.get("docintel", {})),
             "clean_slate": dict(_snapshot.get("clean_slate", {})),
             "diagnostic": dict(_snapshot.get("diagnostic", {})),
+            "dhaka_bulletin": dict(_snapshot.get("dhaka_bulletin", {})),
             "language": _snapshot.get("language", "en"),
         }
 
@@ -460,6 +462,13 @@ def diagnostic(**values):
     with _lock:
         _snapshot["diagnostic"] = dict(values)
     _emit("diagnostic", {"diagnostic": values})
+
+
+def dhaka_bulletin(**values):
+    """Publish the state of the RON Dhaka Live News Wire for the HUD."""
+    with _lock:
+        _snapshot["dhaka_bulletin"] = dict(values)
+    _emit("dhaka_bulletin", {"dhaka_bulletin": values})
 
 
 

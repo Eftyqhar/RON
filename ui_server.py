@@ -38,6 +38,7 @@ import sfx
 import telegram_bridge
 import netradar
 import docintel
+import dhaka_desk
 
 try:
     import psutil
@@ -271,6 +272,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._netradar_status()
         if path == "/api/docintel/status":
             return self._docintel_status()
+        if path == "/api/dhaka/latest":
+            return self._dhaka_latest()
         return self._static(path)
 
     def do_HEAD(self):
@@ -326,6 +329,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._docintel_export()
         if path == "/api/diagnostic":
             return self._diagnostic()
+        if path == "/api/dhaka/refresh":
+            return self._dhaka_refresh()
+        if path == "/api/dhaka/broadcast":
+            return self._dhaka_broadcast()
         return self._json(404, {"error": "not found"})
 
     def _static(self, path):
@@ -757,6 +764,30 @@ class Handler(BaseHTTPRequestHandler):
         bus.diagnostic(active=True, **metrics)
         bus.activity("Stark Laser Diagnostic Sweep engaged", "accent")
         return self._json(200, {"ok": True, "metrics": metrics})
+
+    def _dhaka_latest(self):
+        """Return latest harvested Bangladeshi news wire."""
+        data = dhaka_desk.harvest_all(force_refresh=False)
+        return self._json(200, data)
+
+    def _dhaka_refresh(self):
+        """Force background re-harvest of Bangladeshi feeds."""
+        data = dhaka_desk.harvest_all(force_refresh=True)
+        bus.dhaka_bulletin(
+            open=False,
+            timestamp=data.get("timestamp"),
+            updated_at=data.get("updated_at"),
+            total_count=data.get("total_count", 0),
+            articles=data.get("articles", [])[:40]
+        )
+        return self._json(200, {"ok": True, "count": data.get("total_count", 0)})
+
+    def _dhaka_broadcast(self):
+        """Trigger spoken audio broadcast of top stories."""
+        data = self._read_json() if self.headers.get("content-length") else {}
+        category = str(data.get("category") or "all").strip()
+        res = dhaka_desk.broadcast_bulletin(category=category)
+        return self._json(200, res)
 
 
 

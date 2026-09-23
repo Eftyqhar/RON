@@ -27,6 +27,7 @@ import telegram_bridge
 import netradar
 import clean_slate
 import docintel
+import dhaka_desk
 import sfx
 import voice
 from voice import speak, listen
@@ -130,8 +131,21 @@ Tools:
 25. Document Intel:   {"tool": "doc_intel", "action": "summarize|ask|extract_tables|open", "query": "optional question or calculation", "file_path": "optional path"}
 26. Clean Slate:      {"tool": "clean_slate", "target": "downloads|documents|desktop"}
 27. System Diagnostic: {"tool": "diagnostic"}
+28. Dhaka News Desk:   {"tool": "dhaka_news", "category": "all|national|economy|sports|tech", "open_hud": true}
 
 Rules:
+- bangladesh news / dhaka news / bangladesh headlines / bd news / cricket news / cricket headlines / tigers news / economy news bd / share market news / tech news bangladesh / আজকের খবর / বাংলাদেশের খবর / ঢাকা বুলেটিন / তাজা খবর / খবর বলো / ক্রিকেট সংবাদ বলো / অর্থনীতির খবর দাও → dhaka_news, examples:
+    "what's the news in bangladesh" → {"tool": "dhaka_news", "category": "all", "open_hud": true}
+    "bangladesh news" → {"tool": "dhaka_news", "category": "all", "open_hud": true}
+    "dhaka news" → {"tool": "dhaka_news", "category": "all", "open_hud": true}
+    "bd cricket news" → {"tool": "dhaka_news", "category": "sports", "open_hud": true}
+    "cricket news" → {"tool": "dhaka_news", "category": "sports", "open_hud": true}
+    "bangladesh economy news" → {"tool": "dhaka_news", "category": "economy", "open_hud": true}
+    "open dhaka desk" → {"tool": "dhaka_news", "category": "all", "open_hud": true}
+    "আজকের খবর কী" → {"tool": "dhaka_news", "category": "all", "open_hud": true}
+    "বাংলাদেশের খবর বলো" → {"tool": "dhaka_news", "category": "all", "open_hud": true}
+    "ক্রিকেট সংবাদ দাও" → {"tool": "dhaka_news", "category": "sports", "open_hud": true}
+    "অর্থনীতির খবর বলো" → {"tool": "dhaka_news", "category": "economy", "open_hud": true}
 - run diagnostic / system reboot / system diagnostic / telemetry sweep / diagnostic sweep → diagnostic, examples:
     "run diagnostic" → {"tool": "diagnostic"}
     "run system diagnostic" → {"tool": "diagnostic"}
@@ -2762,13 +2776,78 @@ def handle_diagnostic(data: dict) -> str:
         return (
             f"সিস্টেম ডায়াগনস্টিক সম্পন্ন হয়েছে, স্যার। সব সাব-সিস্টেম স্বাভাবিক রয়েছে। "
             f"সিপিইউ {cpu} শতাংশ, র‍্যাম {ram_gb} গিগাবাইট, নেটওয়ার্ক ল্যাটেন্সি {ping_ms} মিলিসেকেন্ড। "
-            f"আয়রন ম্যান প্রোটোকল সক্রিয়।"
+            
         )
     return (
         f"Diagnostic sweep complete, Sir. All systems operating within nominal parameters. "
         f"CPU at {cpu} percent, RAM at {ram_gb} gigabytes, network latency {ping_ms} milliseconds. "
-        f"Iron Man protocols engaged."
+        
     )
+
+
+# ---------------------------------------------------------------------------
+# RON ঢাকা বুলেটিন (The Dhaka Live News Wire & Intelligence Desk)
+# ---------------------------------------------------------------------------
+
+def extract_dhaka_news(command: str) -> dict | None:
+    """Classify a Bangladeshi news wire / Dhaka bulletin request, or return None."""
+    if not command:
+        return None
+    low = command.lower().strip()
+
+    def _detect_category(text: str) -> str:
+        t = text.lower()
+        if any(w in t for w in ["cricket", "sport", "match", "ক্রিকেট", "টাইগার", "খেলা", "ম্যাচ", "স্কোর"]):
+            return "sports"
+        if any(w in t for w in ["economy", "economic", "market", "stock", "finance", "business", "tbs", "অর্থনীতি", "অর্থনৈতিক", "বাজার", "শেয়ার", "বাণিজ্য"]):
+            return "economy"
+        if any(w in t for w in ["tech", "technology", "startup", "ai", "প্রযুক্তি", "আইটি", "স্টার্টআপ"]):
+            return "tech"
+        if any(w in t for w in ["national", "politics", "জাতীয়", "রাজনীতি", "দেশ"]):
+            return "national"
+        return "all"
+
+    # 1. Direct Bangla matches:
+    bangla_keywords = [
+        "আজকের খবর", "আজকের সংবাদ", "আজকের তাজা খবর", "তাজা খবর", "তাজা সংবাদ",
+        "বাংলাদেশের খবর", "বাংলাদেশের সংবাদ", "ঢাকা বুলেটিন", "ঢাকা নিউজ",
+        "খবর বলো", "সংবাদ বলো", "সংবাদ শোনাও", "খবর শোনাও", "খবর কী", "খবর কি",
+        "খবরের বুলেটিন", "নিউজ বুলেটিন", "নিউজ বলো", "নিউজ শোনাও"
+    ]
+    if any(k in low for k in bangla_keywords):
+        return {"category": _detect_category(low), "open_hud": True}
+
+    if any(k in low for k in ["ক্রিকেট খবর", "ক্রিকেটের খবর", "ক্রিকেট সংবাদ", "অর্থনীতির খবর", "বাজারের খবর", "প্রযুক্তির খবর"]):
+        return {"category": _detect_category(low), "open_hud": True}
+
+    # 2. English matches:
+    en_patterns = [
+        r"\b(?:what(?:'s| is) (?:the )?)?(?:latest |breaking )?(?:bangladesh|bd|dhaka)\s+(?:news|headlines|bulletin|updates?|desk|wire)\b",
+        r"\b(?:news|headlines|updates?)\s+(?:in|from|about|of)\s+bangladesh\b",
+        r"\b(?:open|show|display|launch)\s+(?:the\s+)?dhaka\s+(?:bulletin|desk|wire|news)\b",
+        r"\b(?:bangladesh|bd)\s+cricket\s+(?:news|headlines|updates?)\b",
+        r"\bcricket\s+(?:news|headlines|bulletin|updates?)\b",
+        r"\b(?:bangladesh|bd)\s+(?:economy|market|business)\s+news\b",
+        r"\b(?:bangladesh|bd)\s+tech(?:nology)?\s+news\b",
+        r"^(?:ron[,\\s]+)?(?:the\\s+)?dhaka\s+(?:bulletin|desk|wire|news)$",
+        r"^(?:ron[,\\s]+)?(?:bangladesh|bd)\s+news$"
+    ]
+    for pat in en_patterns:
+        if re.search(pat, low):
+            return {"category": _detect_category(low), "open_hud": True}
+
+    return None
+
+
+def handle_dhaka_news(data: dict) -> str:
+    """Execute Dhaka News Desk retrieval, HUD modal broadcast, and spoken bulletin."""
+    category = str(data.get("category") or "all").lower().strip()
+    if category not in ("national", "economy", "sports", "tech", "all"):
+        category = "all"
+
+    bus.set_state(bus.EXECUTING, f"DHAKA BULLETIN · {category.upper()}")
+    res = dhaka_desk.broadcast_bulletin(category=category)
+    return res.get("spoken", "সংবাদ বুলেটিন প্রস্তুত করা হয়েছে, স্যার।")
 
 
 # ---------------------------------------------------------------------------
@@ -3684,6 +3763,13 @@ def _process_command(user_input: str):
         speak(reply)
         return
 
+    # RON ঢাকা বুলেটিন (The Dhaka Live News Wire & Intelligence Desk), answered directly
+    dhaka_cmd = extract_dhaka_news(user_input)
+    if dhaka_cmd:
+        reply = handle_dhaka_news(dhaka_cmd)
+        speak(reply)
+        return
+
     conversation_history.append({"role": "user", "content": user_input})
     _trim_context()   # bound the request we are about to send
 
@@ -3819,6 +3905,8 @@ def _process_command(user_input: str):
             result = handle_clean_slate(data)
         elif tool in ("diagnostic", "system_diagnostic", "system_reboot", "diagnostic_sweep"):
             result = handle_diagnostic(data)
+        elif tool in ("dhaka_news", "bangladesh_news", "dhaka_bulletin", "bd_news"):
+            result = handle_dhaka_news(data)
         else:
             result = "Unknown tool requested."
 

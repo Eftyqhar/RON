@@ -71,6 +71,7 @@ config.json
 # Local runtime caches & runtime state
 intel_cache.json
 tribune_cache.json
+dhaka_cache.json
 research_history.json
 @AutomationLog.txt
 *.log

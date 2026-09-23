@@ -5269,6 +5269,268 @@ function initDocIntelListeners() {
 // Call init once DOM is parsed
 initDocIntelListeners();
 
+/* ══════════════════════════════════════════════════════════════════════
+   RON ঢাকা বুলেটিন — DHAKA LIVE NEWS WIRE & INTELLIGENCE DESK (0% GPU)
+   ══════════════════════════════════════════════════════════════════════ */
+
+const dhakaDeskUI = {
+  open: false,
+  activeCat: 'all',
+  searchQuery: '',
+  data: null,
+};
+
+function openDhakaDesk(data) {
+  dhakaDeskUI.open = true;
+  const overlay = $('dhaka-overlay');
+  if (overlay) {
+    overlay.removeAttribute('hidden');
+    overlay.setAttribute('aria-hidden', 'false');
+    overlay.setAttribute('data-status', 'open');
+    overlay.classList.add('open');
+    overlay.style.display = 'flex';
+  }
+  if (data && data.articles && data.articles.length) {
+    dhakaDeskUI.data = data;
+    renderDhakaDesk(data);
+  } else if (dhakaDeskUI.data && dhakaDeskUI.data.articles) {
+    renderDhakaDesk(dhakaDeskUI.data);
+  } else {
+    refreshDhakaDesk();
+  }
+}
+
+function closeDhakaDesk() {
+  dhakaDeskUI.open = false;
+  const overlay = $('dhaka-overlay');
+  if (overlay) {
+    overlay.setAttribute('hidden', '');
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.setAttribute('data-status', 'idle');
+    overlay.classList.remove('open');
+    overlay.style.display = 'none';
+  }
+}
+
+function toggleDhakaDesk() {
+  if (dhakaDeskUI.open) closeDhakaDesk();
+  else openDhakaDesk();
+}
+
+async function refreshDhakaDesk() {
+  const btn = $('dhaka-btn-refresh');
+  if (btn) btn.classList.add('spinning');
+  try {
+    const res = await fetch('/api/dhaka/latest');
+    if (!res.ok) return;
+    const data = await res.json();
+    dhakaDeskUI.data = data;
+    renderDhakaDesk(data);
+  } catch (err) {
+    console.error('Failed to fetch Dhaka bulletin:', err);
+  } finally {
+    if (btn) btn.classList.remove('spinning');
+  }
+}
+
+async function forceHarvestDhakaDesk() {
+  const btn = $('dhaka-btn-refresh');
+  if (btn) {
+    btn.classList.add('spinning');
+    btn.disabled = true;
+  }
+  try {
+    const res = await fetch('/api/dhaka/refresh', { method: 'POST' });
+    if (!res.ok) return;
+    const data = await fetch('/api/dhaka/latest').then(r => r.json());
+    dhakaDeskUI.data = data;
+    renderDhakaDesk(data);
+  } catch (err) {
+    console.error('Failed to refresh Dhaka desk:', err);
+  } finally {
+    if (btn) {
+      btn.classList.remove('spinning');
+      btn.disabled = false;
+    }
+  }
+}
+
+async function triggerDhakaBroadcast() {
+  const btn = $('dhaka-btn-broadcast');
+  if (btn) btn.classList.add('pulse');
+  try {
+    await fetch('/api/dhaka/broadcast', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category: dhakaDeskUI.activeCat })
+    });
+  } catch (err) {
+    console.error('Failed to broadcast Dhaka bulletin:', err);
+  } finally {
+    setTimeout(() => { if (btn) btn.classList.remove('pulse'); }, 1200);
+  }
+}
+
+function applyDhakaDesk(bulletin, fromSnapshot) {
+  if (!bulletin) return;
+  if (bulletin.articles && bulletin.articles.length) {
+    dhakaDeskUI.data = bulletin;
+  }
+  if (bulletin.open === true) {
+    openDhakaDesk(bulletin);
+  } else if (dhakaDeskUI.open && dhakaDeskUI.data) {
+    renderDhakaDesk(dhakaDeskUI.data);
+  }
+}
+
+function renderDhakaDesk(data) {
+  if (!data) return;
+
+  // Metadata
+  if ($('dhaka-meta-updated')) $('dhaka-meta-updated').textContent = data.updated_at || 'LIVE';
+  if ($('dhaka-meta-count')) $('dhaka-meta-count').textContent = data.total_count || (data.articles ? data.articles.length : 0);
+
+  // Category Counts
+  const counts = data.category_counts || {};
+  if ($('dhaka-count-all')) $('dhaka-count-all').textContent = counts.all || (data.articles ? data.articles.length : 0);
+  if ($('dhaka-count-national')) $('dhaka-count-national').textContent = counts.national || 0;
+  if ($('dhaka-count-economy')) $('dhaka-count-economy').textContent = counts.economy || 0;
+  if ($('dhaka-count-sports')) $('dhaka-count-sports').textContent = counts.sports || 0;
+  if ($('dhaka-count-tech')) $('dhaka-count-tech').textContent = counts.tech || 0;
+
+  // Marquee Ticker
+  const tickerEl = $('dhaka-ticker-text');
+  if (tickerEl && data.articles && data.articles.length) {
+    const tickerItems = data.articles.slice(0, 15).map(a => `● [${a.source || 'BD'}] ${a.title}`).join('     ');
+    tickerEl.textContent = tickerItems;
+  }
+
+  renderDhakaArticles();
+}
+
+function renderDhakaArticles() {
+  const container = $('dhaka-articles-grid');
+  if (!container) return;
+
+  const data = dhakaDeskUI.data;
+  if (!data || !data.articles) {
+    container.innerHTML = '<p class="empty">সংবাদ লোড হচ্ছে...</p>';
+    return;
+  }
+
+  let articles = data.articles;
+  if (dhakaDeskUI.activeCat && dhakaDeskUI.activeCat !== 'all') {
+    if (data.categories && data.categories[dhakaDeskUI.activeCat]) {
+      articles = data.categories[dhakaDeskUI.activeCat];
+    } else {
+      articles = articles.filter(a => a.category === dhakaDeskUI.activeCat);
+    }
+  }
+
+  const query = (dhakaDeskUI.searchQuery || '').trim().toLowerCase();
+  if (query) {
+    articles = articles.filter(a =>
+      (a.title && a.title.toLowerCase().includes(query)) ||
+      (a.summary && a.summary.toLowerCase().includes(query)) ||
+      (a.source && a.source.toLowerCase().includes(query))
+    );
+  }
+
+  container.innerHTML = '';
+  if (!articles.length) {
+    container.innerHTML = '<p class="empty">কোনো খবর পাওয়া যায়নি (No matching dispatches found)</p>';
+    return;
+  }
+
+  articles.slice(0, 50).forEach(art => {
+    const card = document.createElement('article');
+    card.className = 'dhaka-card';
+
+    const catBadge = {
+      national: 'জাতীয়',
+      economy: 'অর্থনীতি',
+      sports: 'ক্রিকেট',
+      tech: 'প্রযুক্তি'
+    }[art.category] || (art.category || 'সংবাদ').toUpperCase();
+
+    const topRow = document.createElement('div');
+    topRow.className = 'dhaka-card-top';
+
+    const sourceEl = document.createElement('span');
+    sourceEl.className = 'dhaka-card-source mono micro';
+    sourceEl.textContent = art.source || 'WIRE';
+
+    const catEl = document.createElement('span');
+    catEl.className = `dhaka-card-cat mono micro cat-${art.category || 'national'}`;
+    catEl.textContent = catBadge;
+
+    topRow.append(sourceEl, catEl);
+
+    const titleEl = document.createElement('h3');
+    titleEl.className = 'dhaka-card-title';
+    titleEl.textContent = art.title;
+
+    const summaryEl = document.createElement('p');
+    summaryEl.className = 'dhaka-card-summary';
+    summaryEl.textContent = art.summary || '';
+
+    const footRow = document.createElement('div');
+    footRow.className = 'dhaka-card-foot';
+
+    const timeEl = document.createElement('span');
+    timeEl.className = 'dhaka-card-time mono micro dim';
+    timeEl.textContent = art.published_at || '';
+
+    const linkEl = document.createElement('a');
+    linkEl.className = 'dhaka-card-link mono micro';
+    linkEl.href = art.url || '#';
+    linkEl.target = '_blank';
+    linkEl.rel = 'noopener';
+    linkEl.innerHTML = 'মূল খবর ↗';
+    linkEl.addEventListener('click', (e) => {
+      if (art.url && art.url.startsWith('http')) {
+        e.preventDefault();
+        fetch('/api/open', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: art.url })
+        });
+      }
+    });
+
+    footRow.append(timeEl, linkEl);
+    card.append(topRow, titleEl, summaryEl, footRow);
+    container.appendChild(card);
+  });
+}
+
+function initDhakaListeners() {
+  if ($('dhaka-close')) $('dhaka-close').addEventListener('click', closeDhakaDesk);
+  if ($('chip-dhaka')) $('chip-dhaka').addEventListener('click', toggleDhakaDesk);
+  if ($('dhaka-btn-refresh')) $('dhaka-btn-refresh').addEventListener('click', forceHarvestDhakaDesk);
+  if ($('dhaka-btn-broadcast')) $('dhaka-btn-broadcast').addEventListener('click', triggerDhakaBroadcast);
+
+  const tabs = document.querySelectorAll('.dhaka-tab');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      dhakaDeskUI.activeCat = tab.dataset.cat || 'all';
+      renderDhakaArticles();
+    });
+  });
+
+  const searchInput = $('dhaka-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      dhakaDeskUI.searchQuery = e.target.value;
+      renderDhakaArticles();
+    });
+  }
+}
+
+initDhakaListeners();
+
 /* ── SSE link ─────────────────────────────────────────────────────────── */
 
 
@@ -5317,6 +5579,7 @@ function connect() {
         applyTelegram(msg.telegram || {}, true);
         applyNetRadar(msg.netradar || {}, true);
         applyDocIntel(msg.docintel || {}, true);
+        applyDhakaDesk(msg.dhaka_bulletin || {}, true);
         applyLanguage(msg.language || 'en');
         $('conversation').innerHTML = '';
         $('activity').innerHTML = '';
@@ -5415,6 +5678,9 @@ function connect() {
       case 'docintel':
         applyDocIntel(msg.docintel || {}, false);
         break;
+      case 'dhaka_bulletin':
+        applyDhakaDesk(msg.dhaka_bulletin || {}, false);
+        break;
       case 'language':
         applyLanguage(msg.language || 'en');
         break;
@@ -5502,6 +5768,8 @@ document.addEventListener('keydown', (e) => {
   if (tribuneUI.open && e.key === 'Escape') { e.preventDefault(); closeTribune(); return; }
   if ((radarUI.open || $('radar-overlay')?.getAttribute('data-status') === 'open' || $('radar-overlay')?.classList.contains('open')) && e.key === 'Escape') { e.preventDefault(); closeRadar(); return; }
   if ((docUI.open || $('docintel-overlay')?.getAttribute('data-status') === 'open' || $('docintel-overlay')?.classList.contains('open')) && e.key === 'Escape') { e.preventDefault(); closeDocIntel(); return; }
+  if ((dhakaDeskUI.open || $('dhaka-overlay')?.getAttribute('data-status') === 'open' || $('dhaka-overlay')?.classList.contains('open')) && e.key === 'Escape') { e.preventDefault(); closeDhakaDesk(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'b' || e.key === 'B')) { e.preventDefault(); toggleDhakaDesk(); return; }
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'd' || e.key === 'D')) { e.preventDefault(); toggleDocIntel(); return; }
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'l' || e.key === 'L')) { e.preventDefault(); triggerLaserDiagnostic(); return; }
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'n' || e.key === 'N')) { e.preventDefault(); toggleRadar(); return; }
@@ -5536,6 +5804,8 @@ if ($('coach-close')) $('coach-close').addEventListener('click', closeCoach);
 if ($('chip-coach')) $('chip-coach').addEventListener('click', toggleCoach);
 if ($('chip-mem')) $('chip-mem').addEventListener('click', toggleMemory);
 if ($('chip-sys')) $('chip-sys').addEventListener('click', () => triggerLaserDiagnostic());
+if ($('chip-dhaka')) $('chip-dhaka').addEventListener('click', toggleDhakaDesk);
+if ($('dhaka-close')) $('dhaka-close').addEventListener('click', closeDhakaDesk);
 if ($('pt-close')) $('pt-close').addEventListener('click', closeProtocol);
 if ($('bf-close')) $('bf-close').addEventListener('click', closeBriefing);
 if ($('rs-close')) $('rs-close').addEventListener('click', closeResearch);

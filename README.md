@@ -35,6 +35,7 @@ It combines real-time speech recognition (Google Speech-to-Text), offline text-t
 | Feature | Description |
 |---|---|
 | ⚡ **Stark Laser Diagnostic Sweep** | Iconic holographic diagnostic boot-up sweep designed with **0% GPU load** (<0.5% CPU via pure 2D CSS transforms & SVG lines). Glowing cyan laser line sweeps top-to-bottom across HUD panels while telemetry digits scramble & roll up from `00` to real active metrics (CPU, RAM GB/%, PING ms, DISK %). Paired with procedural capacitor whine and Iron Man suit servo chime audio FX (`Ctrl + Shift + L`). |
+| 🇧🇩 **RON ঢাকা বুলেটিন (Dhaka Live News Wire)** | Real-time dedicated Bangladeshi intelligence wire designed with **0% GPU load** (<0.5% CPU). Concurrently harvests top national dailies (Prothom Alo, The Daily Star, The Business Standard, Google News BD) across 4 desks: জাতীয় (National), অর্থনীতি ও বাজার (Economy & Markets), ক্রিকেট ও স্পোর্টস (Cricket & Tigers), and প্রযুক্তি (Tech & Startups). Emerald Jade HUD modal (`Ctrl + Shift + B`), marquee breaking news ticker tape, category search, and fluent bilingual spoken bulletins in Bengali and English. |
 | 🧹 **Clean Slate (Auto-Organizer)** | Zero-loss autonomous workspace & file auto-organizer for `Downloads`, `Documents`, and `Desktop` (`clean_slate.py`). Context-aware categorization (PDFs, Word Docs, Spreadsheets, Presentations, Images, Archives, Code), non-destructive collision renaming, and stale installer warnings. Zero GPU required. |
 | 🔊 **Cinematic Stark Audio FX Engine** | High-tech mechanical & acoustic sound design (`sfx.py`) synthesized procedurally in-memory on CPU (0% GPU). Holographic hum on HUD startup, Iron Man suit servo on protocol shifts, and crystalline sonar ping on radar discoveries. Plays non-blocking over dedicated channels without interrupting TTS. |
 | 📰 **The RON World Tribune** | Autonomous daily AI newspaper editor: concurrently harvests 50+ feeds across 6 desks, deduplicates stories, compiles Victorian/Modern broadsheet PDF to Documents, delivers 3-min executive audio broadcast, and HUD broadsheet reader modal (`Ctrl + Shift + T`). Zero GPU required. |
@@ -576,6 +577,27 @@ An iconic holographic diagnostic boot-up sweep designed with **strict 0% GPU req
 - **🎙️ Military Stark Debrief:** RON speaks a concise diagnostic report with live parameters:
   - English: *"Diagnostic sweep complete, Sir. All systems operating within nominal parameters. CPU at 18 percent, RAM at 5.2 gigabytes, network latency 14 milliseconds. Iron Man protocols engaged."*
   - Bengali: *"সিস্টেম ডায়াগনস্টিক সম্পন্ন হয়েছে, স্যার। সব সাব-সিস্টেম স্বাভাবিক রয়েছে। সিপিইউ ১৮ শতাংশ, র‍্যাম ৫.২ গিগাবাইট, নেটওয়ার্ক ল্যাটেন্সি ১৪ মিলিসেকেন্ড। আয়রন ম্যান প্রোটোকল সক্রিয়।"*
+
+---
+
+### 🇧🇩 RON ঢাকা বুলেটিন · The Dhaka Live News Wire & HUD Desk (0% GPU)
+A dedicated, real-time Bangladeshi intelligence desk engineered exclusively with **strict 0% GPU load** (100% CPU-safe, pure 2D CSS transforms, HTML5 DOM, and concurrent RSS streaming).
+
+#### What it looks like:
+- **Emerald Jade Holographic HUD Console (`Ctrl + Shift + B` or click `DHAKA` chip):**
+  - **Live Marquee Breaking News Ticker:** Smooth 2D hardware-accelerated ticker tape continuously rolling current breaking news across all top dailies.
+  - **Curated Desks & Category Filters:** Switch dynamically between সব সংবাদ (All Dispatches), 🏛️ জাতীয় (National & Politics), 💼 অর্থনীতি ও বাজার (Economy & Markets), 🏏 ক্রিকেট ও খেলা (Cricket & Tigers), and 💻 প্রযুক্তি (Tech & Startups).
+  - **Live Search & Filter:** Instant headline and summary search filtering across hundreds of concurrent stories.
+  - **One-Click Read Original:** Click "মূল খবর ↗" to instantly open the verified dispatch in your default web browser.
+
+#### Spoken Voice Bulletins (Bilingual Bengali & English):
+| Command | Action |
+|---|---|
+| *"আজকের খবর কী?"* / *"বাংলাদেশের খবর বলো"* | Generates real-time top national headlines debrief in natural Bengali with TTS audio |
+| *"ক্রিকেট সংবাদ বলো"* / *"টাইগারদের খবর দাও"* | Synthesizes Tigers cricket & sports briefing in Bengali |
+| *"অর্থনীতির খবর দাও"* / *"বাজারের খবর বলো"* | Synthesizes Bangladeshi economy, trade & market debrief in Bengali |
+| *"Ron, what's the news in Bangladesh?"* / *"Dhaka news"* | Delivers concise executive English briefing of top Bangladeshi dispatches |
+| `Ctrl + Shift + B` or Click **DHAKA** chip | Instantly toggles the holographic Emerald Jade Dhaka News Wire modal on HUD |
 
 ---
 
