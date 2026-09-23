@@ -53,6 +53,7 @@ _START = time.time()
 # Imported lazily in serve() so `--help` and a missing microphone cannot stop the
 # server from at least explaining itself.
 ron = None
+_ron_ready = threading.Event()
 
 
 # ------------------------------------------------------------------ telemetry --
@@ -420,7 +421,9 @@ class Handler(BaseHTTPRequestHandler):
         if not text:
             return self._json(400, {"error": "empty command"})
         if ron is None:
-            return self._json(503, {"error": "assistant not loaded"})
+            _ron_ready.wait(timeout=6.0)
+        if ron is None:
+            return self._json(503, {"error": "assistant still initializing"})
 
         # listen() lowercases what it hears; typed commands must match so the
         # keyword routing in extract_website/extract_folder behaves identically.
@@ -465,7 +468,9 @@ class Handler(BaseHTTPRequestHandler):
     def _control(self):
         action = str(self._read_json().get("action") or "")
         if ron is None:
-            return self._json(503, {"error": "assistant not loaded"})
+            _ron_ready.wait(timeout=6.0)
+        if ron is None:
+            return self._json(503, {"error": "assistant still initializing"})
 
         if action == "mic_on":
             ron.voice_enabled.set()
@@ -839,7 +844,7 @@ def _chromium_exe():
 
 
 def open_ui(url, mode):
-    sfx.play("hud_hum", debounce_s=8.0)
+    threading.Thread(target=lambda: sfx.play("hud_hum", debounce_s=8.0), daemon=True).start()
     if mode == "none":
         return
     if mode == "app":
@@ -905,24 +910,21 @@ def serve(argv=None):
         # and this has to be in the environment before it does.
         os.environ["RON_LOCATION"] = args.location
 
-    print("[Loading RON...]")
-    import main as ron_module
-    ron = ron_module
+    os.environ["RON_SHOW_CONSOLE"] = "1"
 
-    bus.set_state(bus.IDLE, "SYSTEM READY")
-    bus.activity("HUD server started", "ok")
-    sfx.preload_all()
-    probe_hardware()
-    if hasattr(ron, "start_focus_monitor"):
-        ron.start_focus_monitor()
-    bus.meta(voice_loop=not args.no_voice, mic_muted=args.no_voice)
-
+    # Step 1: Bind socket immediately (<2ms)
     _server = _bind(args.host, args.port)
     url = f"http://{args.host}:{_server.server_address[1]}/"
 
+    # Step 2: Instant UI Launch (<15ms) - pops up browser window right away!
+    print(f"\n  R.O.N. HUD  ->  {url}\n  Launching holographic interface...\n")
+    threading.Thread(target=open_ui, args=(url, args.browser), daemon=True).start()
+
+    # Step 3: Start live telemetry loop immediately so HUD displays real metrics right away
     stop = threading.Event()
     threading.Thread(target=telemetry_loop, args=(stop,), daemon=True).start()
 
+    # Step 4: Start weather poller in background
     if args.no_weather:
         bus.weather(ok=False, error="weather poller disabled")
         bus.meta(weather_ok=False)
@@ -930,34 +932,62 @@ def serve(argv=None):
     else:
         threading.Thread(target=weather_loop, args=(stop,), daemon=True).start()
 
-    if args.no_voice:
-        ron.voice_enabled.clear()
-        print("[Voice loop disabled: type commands in the HUD command line.]")
+    # Step 5: Asynchronous parallel bootloader for core engines & voice loop
+    def _boot_core():
+        global ron
+        t0 = time.monotonic()
+        print("[Initializing R.O.N. core engines...]")
         try:
-            telegram_bridge.start_telegram_daemon()
+            import main as ron_module
+            ron = ron_module
+            _ron_ready.set()
         except Exception as e:
-            print(f"[telegram_bridge error: {e}]")
-        try:
-            docintel.start_rag_watcher()
-        except Exception as e:
-            print(f"[docintel watcher error: {e}]")
-    else:
-        threading.Thread(target=ron.run_voice_loop,
-                         kwargs={"greet": not args.no_greet},
-                         daemon=True).start()
+            print(f"[Error loading RON core: {e}]")
+            bus.activity(f"Core loading fault: {e}", "fail")
+            bus.set_state(bus.ERROR, f"CORE FAULT: {e}")
+            return
 
-    print(f"\n  R.O.N. HUD  ->  {url}\n  Ctrl+C to shut down.\n")
-    threading.Thread(target=open_ui, args=(url, args.browser), daemon=True).start()
+        bus.set_state(bus.IDLE, "SYSTEM READY")
+        bus.activity("HUD server online", "ok")
 
-    # Bring the process down when RON is dismissed by voice ("goodbye"), which
-    # sets shutdown_event on the voice thread rather than through /api/control.
-    def watch_shutdown():
-        ron.shutdown_event.wait()
-        time.sleep(0.6)
-        _server.stopping.set()
-        _server.shutdown()
+        # Non-blocking audio preload & hardware probe in separate threads
+        threading.Thread(target=sfx.preload_all, daemon=True).start()
+        threading.Thread(target=probe_hardware, daemon=True).start()
 
-    threading.Thread(target=watch_shutdown, daemon=True).start()
+        if hasattr(ron, "start_focus_monitor"):
+            ron.start_focus_monitor()
+
+        bus.meta(voice_loop=not args.no_voice, mic_muted=args.no_voice)
+
+        if args.no_voice:
+            ron.voice_enabled.clear()
+            print("[Voice loop disabled: type commands in the HUD command line.]")
+            try:
+                telegram_bridge.start_telegram_daemon()
+            except Exception as e:
+                print(f"[telegram_bridge error: {e}]")
+            try:
+                docintel.start_rag_watcher()
+            except Exception as e:
+                print(f"[docintel watcher error: {e}]")
+        else:
+            threading.Thread(target=ron.run_voice_loop,
+                             kwargs={"greet": not args.no_greet},
+                             daemon=True).start()
+
+        elapsed = round(time.monotonic() - t0, 2)
+        print(f"[R.O.N. Core fully online in {elapsed}s]\n  Ctrl+C in console to shut down.\n")
+
+        # Bring the process down when RON is dismissed by voice ("goodbye")
+        def watch_shutdown():
+            ron.shutdown_event.wait()
+            time.sleep(0.6)
+            _server.stopping.set()
+            _server.shutdown()
+
+        threading.Thread(target=watch_shutdown, daemon=True).start()
+
+    threading.Thread(target=_boot_core, daemon=True).start()
 
     try:
         _server.serve_forever(poll_interval=0.3)
@@ -966,7 +996,8 @@ def serve(argv=None):
     finally:
         stop.set()
         _server.stopping.set()
-        ron.shutdown_event.set()
+        if ron is not None and hasattr(ron, "shutdown_event"):
+            ron.shutdown_event.set()
         bus.set_state(bus.OFFLINE)
         _server.server_close()
         # Closed here rather than in run_voice_loop: this process owns the

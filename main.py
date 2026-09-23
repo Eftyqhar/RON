@@ -40,10 +40,11 @@ if sys.platform == 'win32':
     import io
     import ctypes
 
-    # Auto-hide console window if running silently
+    # Auto-hide console window if running silently (never hide for ui_server or if console requested)
     try:
         hwnd = ctypes.windll.kernel32.GetConsoleWindow()
-        if hwnd and os.environ.get("RON_SHOW_CONSOLE", "0") != "1" and len(sys.argv) <= 1:
+        is_ui_server = "ui_server" in os.path.basename(sys.argv[0]).lower() if sys.argv else False
+        if hwnd and os.environ.get("RON_SHOW_CONSOLE", "0") != "1" and len(sys.argv) <= 1 and not is_ui_server:
             ctypes.windll.user32.ShowWindow(hwnd, 0)  # 0 = SW_HIDE
     except Exception:
         pass
@@ -74,8 +75,21 @@ if sys.platform == 'win32':
 # Use OpenAI-compatible API from hcnsec.cn. The SDK appends /chat/completions to
 # base_url, so the /v1 belongs here: api.hcnsec.cn/v1/chat/completions is the path
 # confirmed working against this host (see test_output.txt -- status 200).
+_api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+if not _api_key:
+    try:
+        _cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+        if os.path.exists(_cfg_path):
+            with open(_cfg_path, "r", encoding="utf-8") as _f:
+                _cfg = json.load(_f)
+                _api_key = _cfg.get("openai_api_key") or _cfg.get("api_key") or ""
+    except Exception:
+        pass
+if not _api_key:
+    _api_key = "placeholder-key"
+
 client = OpenAI(
-    api_key="",
+    api_key=_api_key,
     base_url="https://api.hcnsec.cn/v1"
 )
 
@@ -3790,6 +3804,13 @@ def _process_command(user_input: str):
                 "- When greeting the user or responding to a greeting/start of conversation, ALWAYS use 'আসসালামু আলাইকুম' (Assalamu Alaikum).\n"
                 "- For tool actions, continue to follow the output contract: return ONLY the single JSON object with the tool key."
             )
+
+        if getattr(client, "api_key", "") in ("", "placeholder-key"):
+            msg = "OpenAI API key is not configured, Sir. Please set OPENAI_API_KEY." if bus.get_language() != "bn" else "ওপেনএআই এপিআই কি কনফিগার করা নেই, স্যার।"
+            bus.activity("Missing API Key", "fail")
+            bus.set_state(bus.ERROR, "MISSING API KEY")
+            speak(msg)
+            return
 
         bus.set_state(bus.THINKING, f"QUERYING {MODEL.upper()}")
         bus.activity("Reasoning over request", "pending")
