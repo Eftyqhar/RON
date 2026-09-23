@@ -2348,7 +2348,7 @@ def extract_intel(command: str) -> dict | None:
         return {"tool": "intel_briefing", "category": "all", "open_hud": True}
 
     # 2. Specific topic commands: sports/football, fixtures, tech, crypto, github
-    if re.search(r"\b(?:(?:read\w*|tell\w*|give\w*|show\w*|get\w*)?\s*(?:all\s+)?(?:sports?|football|soccer)(?:\s+(?:news|headlines?|scores?|matches?|fixtures?|briefing|update))?|sports?\s+(?:news|headlines?|scores?|fixtures?)|football\s+(?:news|headlines?|scores?|fixtures?|matches?)|soccer\s+(?:news|headlines?|scores?|fixtures?)|upcoming\s+(?:football\s+|soccer\s+)?(?:fixtures?|matches?)|latest\s+(?:matches?|scores?|fixtures?)|match\s+scores?|real\s*madrid|barcelona|barca|man(?:chester)?\s*city|man(?:chester)?\s*united|man\s*utd|bayern(?:\s*munich)?|arsenal|bangladesh(?:\s+match|\s+football)?)\b", low):
+    if re.search(r"\b(?:(?:read\w*|tell\w*|give\w*|show\w*|get\w*)?\s*(?:all\s+)?(?:sports?|football|soccer)(?:\s+(?:news|headlines?|scores?|matches?|fixtures?|briefing|update))?|sports?\s+(?:news|headlines?|scores?|fixtures?)|football\s+(?:news|headlines?|scores?|fixtures?|matches?)|soccer\s+(?:news|headlines?|scores?|fixtures?)|upcoming\s+(?:football\s+|soccer\s+)?(?:fixtures?|matches?)|latest\s+(?:matches?|scores?|fixtures?)|match\s+scores?|real\s*madrid|barcelona|barca|man(?:chester)?\s*city|man(?:chester)?\s*united|man\s*utd|bayern(?:\s*munich)?|arsenal|bangladesh\s+(?:match|football|soccer|game))\b", low):
         return {"tool": "intel_briefing", "category": "football", "open_hud": True}
     if re.search(r"\b(?:what(?:'s|\s+is)\s+(?:happening|new)\s+in\s+tech|tech\s+(?:news|briefing|headlines))\b", low):
         return {"tool": "intel_briefing", "category": "tech", "open_hud": True}
@@ -2364,7 +2364,7 @@ def extract_intel(command: str) -> dict | None:
         return {"tool": "intel_briefing", "category": "all", "open_hud": True, "ui_only": True}
 
     # 4. Bengali Natural Language Patterns
-    if re.search(r"(?:(?:সব\s*)?(?:খেলা|খেলার|স্পোর্টস|ফুটবল)(?:\s*(?:খবর|সংবাদ|শিরোনাম|স্কোর|ম্যাচ|ফিক্সচার|আপডেট))?|আসন্ন\s*(?:ম্যাচ|খেলা|ফিক্সচার)|রিয়াল\s*মাদ্রিদ|বার্সেলোনা|বার্সা|ম্যানচেস্টার\s*সিটি|ম্যানচেস্টার\s*ইউনাইটেড|বায়ার্ন|আর্সেনাল|বাংলাদেশ\s*(?:ফুটবল|ম্যাচ))", text):
+    if re.search(r"(?:(?:সব\s*)?(?:ফুটবল|ইউরোপীয়\s*ফুটবল)(?:\s*(?:খবর|সংবাদ|শিরোনাম|স্কোর|ম্যাচ|ফিক্সচার|আপডেট))?|আসন্ন\s*(?:ম্যাচ|ফিক্সচার)|রিয়াল\s*মাদ্রিদ|বার্সেলোনা|বার্সা|ম্যানচেস্টার\s*সিটি|ম্যানচেস্টার\s*ইউনাইটেড|বায়ার্ন|আর্সেনাল|বাংলাদেশ\s+(?:ফুটবল|ম্যাচ))", text):
         return {"tool": "intel_briefing", "category": "football", "open_hud": True}
 
     if re.search(r"(?:ইনটেল\s*(?:ব্রিফিং|রেডিও|রিপোর্ট)|(?:ওয়ার্ল্ড|ওয়ার্ল্ড)\s*রিপোর্ট|বিশ্বের\s*খবর|টেক\s*নিউজ|টেকনোলজি\s*নিউজ|ক্রিপ্টো\s*মার্কেট)", text):
@@ -2841,7 +2841,8 @@ def extract_dhaka_news(command: str) -> dict | None:
     # 1. Direct Bangla matches:
     bangla_keywords = [
         "আজকের খবর", "আজকের সংবাদ", "আজকের তাজা খবর", "তাজা খবর", "তাজা সংবাদ",
-        "বাংলাদেশের খবর", "বাংলাদেশের সংবাদ", "ঢাকা বুলেটিন", "ঢাকা নিউজ",
+        "বাংলাদেশের খবর", "বাংলাদেশের সংবাদ", "বাংলাদেশ নিউজ", "বিডি নিউজ", "ঢাকা বুলেটিন", "ঢাকা নিউজ",
+        "বাংলাদেশ খবর", "বাংলাদেশ সংবাদ", "বিডি খবর", "বিডি সংবাদ",
         "খবর বলো", "সংবাদ বলো", "সংবাদ শোনাও", "খবর শোনাও", "খবর কী", "খবর কি",
         "খবরের বুলেটিন", "নিউজ বুলেটিন", "নিউজ বলো", "নিউজ শোনাও"
     ]
@@ -2855,6 +2856,7 @@ def extract_dhaka_news(command: str) -> dict | None:
     en_patterns = [
         r"\b(?:what(?:'s| is) (?:the )?)?(?:latest |breaking )?(?:bangladesh|bd|dhaka)\s+(?:news|headlines|bulletin|updates?|desk|wire)\b",
         r"\b(?:news|headlines|updates?)\s+(?:in|from|about|of)\s+bangladesh\b",
+        r"\b(?:what(?:'s|\s+is)\s+(?:happening|going on)\s+in\s+bangladesh)\b",
         r"\b(?:open|show|display|launch)\s+(?:the\s+)?dhaka\s+(?:bulletin|desk|wire|news)\b",
         r"\b(?:bangladesh|bd)\s+cricket\s+(?:news|headlines|updates?)\b",
         r"\bcricket\s+(?:news|headlines|bulletin|updates?)\b",
@@ -3752,6 +3754,13 @@ def _process_command(user_input: str):
         speak(reply)
         return
 
+    # RON ঢাকা বুলেটিন (The Dhaka Live News Wire & Intelligence Desk), answered directly
+    dhaka_cmd = extract_dhaka_news(user_input)
+    if dhaka_cmd:
+        reply = handle_dhaka_news(dhaka_cmd)
+        speak(reply)
+        return
+
     # Live Intel Briefing Radio ("RON World Report"), answered directly
     intel_cmd = extract_intel(user_input)
     if intel_cmd:
@@ -3791,13 +3800,6 @@ def _process_command(user_input: str):
     diag_cmd = extract_diagnostic(user_input)
     if diag_cmd:
         reply = handle_diagnostic(diag_cmd)
-        speak(reply)
-        return
-
-    # RON ঢাকা বুলেটিন (The Dhaka Live News Wire & Intelligence Desk), answered directly
-    dhaka_cmd = extract_dhaka_news(user_input)
-    if dhaka_cmd:
-        reply = handle_dhaka_news(dhaka_cmd)
         speak(reply)
         return
 
