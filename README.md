@@ -192,13 +192,25 @@ Update `MIC_INDEX` in `voice.py` to match the working device.
 
 ### 4. Set Your API Key
 
-Open `main.py` and replace the placeholder:
+You can configure your API key in either of two safe ways (never hardcoded):
 
-```python
-client = OpenAI(
-    api_key="YOUR_API_KEY",                 # ← paste your key here
-    base_url="https://api.hcnsec.cn/v1"
-)
+**Option A — In `.env` (Recommended):**
+Copy `.env.example` to `.env` and paste your key:
+```env
+OPENAI_API_KEY=your_api_key_here
+```
+
+**Option B — In `config.json`:**
+Open `config.json` and set `openai_api_key`:
+```json
+{
+  "openai_api_key": "your_api_key_here"
+}
+```
+
+Or set the environment variable directly in Windows terminal:
+```cmd
+set OPENAI_API_KEY=your_api_key_here
 ```
 
 ### 5. Launch Ron

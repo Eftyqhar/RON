@@ -72,6 +72,23 @@ if sys.platform == 'win32':
         except Exception:
             sys.stderr = open(os.devnull, "w", encoding="utf-8")
 
+# Load .env if present
+_env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+try:
+    from dotenv import load_dotenv
+    load_dotenv(_env_path)
+except Exception:
+    if os.path.isfile(_env_path):
+        try:
+            with open(_env_path, "r", encoding="utf-8") as _ef:
+                for _line in _ef:
+                    _line = _line.strip()
+                    if _line and not _line.startswith("#") and "=" in _line:
+                        _k, _v = _line.split("=", 1)
+                        os.environ.setdefault(_k.strip(), _v.strip().strip("'\""))
+        except Exception:
+            pass
+
 # Use OpenAI-compatible API from hcnsec.cn. The SDK appends /chat/completions to
 # base_url, so the /v1 belongs here: api.hcnsec.cn/v1/chat/completions is the path
 # confirmed working against this host (see test_output.txt -- status 200).
