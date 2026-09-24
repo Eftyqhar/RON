@@ -3861,12 +3861,13 @@ def _process_command(user_input: str):
     if not reply:
         try:
             from models import ollama_client
-            if ollama_client.is_ollama_available() and ollama_client.is_model_installed("ron"):
-                bus.set_state(bus.THINKING, "RON NEURAL ENGINE (OFFLINE FALLBACK)")
-                bus.activity("Cloud unavailable; using local Qwen model", "pending")
-                offline_res = ollama_client.run_offline_command(user_input)
+            active_local = getattr(ollama_client, "DEFAULT_MODEL", "ron")
+            if ollama_client.is_ollama_available() and ollama_client.is_model_installed(active_local):
+                bus.set_state(bus.THINKING, f"RON NEURAL ENGINE ({active_local.upper()})")
+                bus.activity(f"Cloud unavailable; using local {active_local} model", "pending")
+                offline_res = ollama_client.run_offline_command(user_input, model=active_local)
                 if offline_res.get("ok"):
-                    bus.meta(model=f"{MODEL} (Offline Fallback -> Qwen 0.5B)", api_ok=False)
+                    bus.meta(model=f"{MODEL} (Offline Fallback -> {active_local})", api_ok=False)
                     if offline_res.get("type") == "tool" and offline_res.get("tool"):
                         reply = json.dumps(offline_res["tool"])
                     else:

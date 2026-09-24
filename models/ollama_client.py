@@ -9,14 +9,15 @@ Designed with:
 
 import json
 import logging
+import os
 import re
 import requests
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger("RON.Ollama")
 
-OLLAMA_BASE_URL = "http://localhost:11434"
-DEFAULT_MODEL = "ron"
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434").strip()
+DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", "ron").strip() or "ron"
 
 
 def is_ollama_available(url: str = OLLAMA_BASE_URL) -> bool:
@@ -99,13 +100,13 @@ def parse_tool_call(response_text: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def run_offline_command(user_input: str) -> Dict[str, Any]:
-    """Execute an offline query through RON's local fine-tuned Qwen model.
+def run_offline_command(user_input: str, model: str = DEFAULT_MODEL) -> Dict[str, Any]:
+    """Execute an offline query through RON's local fine-tuned model.
     
     Returns:
         dict: {"ok": bool, "type": "tool" | "chat", "tool": dict | None, "reply": str}
     """
-    raw = query_ollama(user_input)
+    raw = query_ollama(user_input, model=model)
     if not raw:
         return {"ok": False, "type": "error", "tool": None, "reply": "Offline neural brain unreachable."}
 

@@ -14,6 +14,7 @@ This directory contains the complete pipeline to fine-tune **Qwen 2.5 0.5B-Instr
 | [`train_colab_unsloth.py`](file:///f:/Github/RON/models/train_colab_unsloth.py) | Standalone Python training script using Unsloth (QLoRA) and automated GGUF export. |
 | [`Modelfile`](file:///f:/Github/RON/models/Modelfile) | Ollama model configuration file with tuned Qwen 2.5 ChatML stop tokens and parameters. |
 | [`ollama_client.py`](file:///f:/Github/RON/models/ollama_client.py) | Python interface for RON to query Ollama locally (`http://localhost:11434`). |
+| [`HOW_TO_CHANGE_AND_FINETUNE.md`](file:///f:/Github/RON/models/HOW_TO_CHANGE_AND_FINETUNE.md) | **Complete Guide:** How to switch models in RON and re-fine-tune with 99%+ accuracy. |
 
 ---
 
