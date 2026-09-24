@@ -45,7 +45,7 @@ def query_ollama(
     model: str = DEFAULT_MODEL,
     system_prompt: Optional[str] = None,
     temperature: float = 0.2,
-    timeout: float = 8.0,
+    timeout: float = 25.0,
     url: str = OLLAMA_BASE_URL
 ) -> str:
     """Query local Ollama instance with a single prompt. Returns assistant text."""
