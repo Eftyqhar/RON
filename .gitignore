@@ -95,3 +95,9 @@ $RECYCLE.BIN/
 .idea/
 *.sublime-project
 *.sublime-workspace
+
+# Large model weights & GGUF binaries
+*.gguf
+*.bin
+models/*.gguf
+

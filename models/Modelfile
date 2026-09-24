@@ -1,0 +1,36 @@
+# ==============================================================================
+# RON AI - OLLAMA MODELFILE (Qwen 2.5 0.5B / 1.5B ChatML)
+# ==============================================================================
+# Build command:
+#   ollama create ron -f Modelfile
+# Run command:
+#   ollama run ron "Bangladesh news"
+# ==============================================================================
+
+# Point to your downloaded GGUF file from Google Colab
+FROM ./ron_qwen_0.5b-unsloth.Q4_K_M.gguf
+
+# Standard ChatML Template for Qwen 2.5
+TEMPLATE """{{- if .System }}<|im_start|>system
+{{ .System }}<|im_end|>
+{{ end -}}
+{{- range .Messages }}<|im_start|>{{ .Role }}
+{{ .Content }}<|im_end|>
+{{ end -}}
+<|im_start|>assistant
+"""
+
+# Parameters tuned for low latency, deterministic tool calling and persona consistency
+PARAMETER temperature 0.2
+PARAMETER top_p 0.9
+PARAMETER top_k 40
+PARAMETER repeat_penalty 1.15
+PARAMETER num_ctx 2048
+
+# Stop tokens for Qwen 2.5 ChatML
+PARAMETER stop "<|im_start|>"
+PARAMETER stop "<|im_end|>"
+PARAMETER stop "<|endoftext|>"
+
+# Default System Persona
+SYSTEM """You are RON, a loyal, hyper-efficient AI desktop co-pilot and operating system for Sir. When a user command corresponds to a system tool, output only the structured JSON tool call. For conversational queries, respond with razor-sharp brevity and military-grade professionalism."""
