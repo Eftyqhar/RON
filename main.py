@@ -127,14 +127,7 @@ voice_enabled = threading.Event()  # clear() mutes the mic loop
 voice_enabled.set()
 shutdown_event = threading.Event()
 
-try:
-    from models import ollama_client
-    if ollama_client.is_ollama_available() and ollama_client.is_model_installed("ron"):
-        bus.meta(model="RON (Local Qwen 0.5B)", api_ok=True)
-    else:
-        bus.meta(model=MODEL)
-except Exception:
-    bus.meta(model=MODEL)
+bus.meta(model=MODEL)
 
 SYSTEM_PROMPT = """You are Ron, an advanced personal AI assistant created by Ifteqhar.
 You are intelligent, concise, and helpful — like JARVIS from Iron Man.
@@ -3815,52 +3808,32 @@ def _process_command(user_input: str):
 
     reply = ""
 
-    # Priority 1: Local Fine-Tuned Neural Brain (Ollama / Qwen 2.5 0.5B "ron:latest")
-    # Sub-100ms inference, 0% GPU load, 100% offline autonomy
-    try:
-        from models import ollama_client
-        if ollama_client.is_ollama_available() and ollama_client.is_model_installed("ron"):
-            bus.set_state(bus.THINKING, "RON NEURAL ENGINE (LOCAL)")
-            bus.activity("Querying local Qwen model", "pending")
-            offline_res = ollama_client.run_offline_command(user_input)
-            if offline_res.get("ok"):
-                bus.meta(model="RON (Local Qwen 0.5B)", api_ok=True)
-                if offline_res.get("type") == "tool" and offline_res.get("tool"):
-                    reply = json.dumps(offline_res["tool"])
-                else:
-                    reply = offline_res.get("reply", "")
-                if reply:
-                    bus.activity("Local AI response generated", "ok")
-    except Exception as e:
-        logger.debug(f"[Local Ollama Brain Bypass]: {e}")
+    reply = ""
+    cloud_error = None
+    has_api_key = getattr(client, "api_key", "") not in ("", "placeholder-key")
 
-    # Priority 2: Cloud LLM fallback if local brain was unavailable or produced no output
-    if not reply:
+    current_reminder = TOOL_OUTPUT_REMINDER
+
+    # Proactively inject relevant long-term personal facts and preferences
+    proactive_context = memory.get_proactive_context(user_input)
+    if proactive_context:
+        current_reminder += f"\n\n{proactive_context}"
+
+    if bus.get_language() == "bn":
+        current_reminder += (
+            "\n\n[CRITICAL LANGUAGE & PERSONA INSTRUCTION]\n"
+            "- Bangla mode is currently ACTIVE.\n"
+            "- You MUST communicate and answer in fluent, natural, polite Bengali (বাংলা).\n"
+            "- Address the user respectfully as 'স্যার' (Sir).\n"
+            "- When greeting the user or responding to a greeting/start of conversation, ALWAYS use 'আসসালামু আলাইকুম' (Assalamu Alaikum).\n"
+            "- For tool actions, continue to follow the output contract: return ONLY the single JSON object with the tool key."
+        )
+
+    # -----------------------------------------------------------------------
+    # Priority 1 (DEFAULT): Online Cloud LLM
+    # -----------------------------------------------------------------------
+    if has_api_key:
         try:
-            current_reminder = TOOL_OUTPUT_REMINDER
-
-            # Proactively inject relevant long-term personal facts and preferences
-            proactive_context = memory.get_proactive_context(user_input)
-            if proactive_context:
-                current_reminder += f"\n\n{proactive_context}"
-
-            if bus.get_language() == "bn":
-                current_reminder += (
-                    "\n\n[CRITICAL LANGUAGE & PERSONA INSTRUCTION]\n"
-                    "- Bangla mode is currently ACTIVE.\n"
-                    "- You MUST communicate and answer in fluent, natural, polite Bengali (বাংলা).\n"
-                    "- Address the user respectfully as 'স্যার' (Sir).\n"
-                    "- When greeting the user or responding to a greeting/start of conversation, ALWAYS use 'আসসালামু আলাইকুম' (Assalamu Alaikum).\n"
-                    "- For tool actions, continue to follow the output contract: return ONLY the single JSON object with the tool key."
-                )
-
-            if getattr(client, "api_key", "") in ("", "placeholder-key"):
-                msg = "OpenAI API key is not configured, Sir. Please set OPENAI_API_KEY." if bus.get_language() != "bn" else "ওপেনএআই এপিআই কি কনফিগার করা নেই, স্যার।"
-                bus.activity("Missing API Key", "fail")
-                bus.set_state(bus.ERROR, "MISSING API KEY")
-                speak(msg)
-                return
-
             bus.set_state(bus.THINKING, f"QUERYING {MODEL.upper()}")
             bus.activity("Reasoning over request", "pending")
             response = client.chat.completions.create(
@@ -3874,30 +3847,67 @@ def _process_command(user_input: str):
             bus.meta(model=response.model or MODEL, api_ok=True)
             bus.activity("AI response generated", "ok")
         except Exception as e:
-            error_msg = str(e)
-            # OpenAI-style errors carry the useful text in .body['message']
-            if hasattr(e, 'body') and isinstance(e.body, dict):
-                error_msg = e.body.get('message', error_msg)
-            status = getattr(e, "status_code", None)
-            low = error_msg.lower()
-            print(f"[API Error: {error_msg}]")
-            bus.meta(api_ok=False)
-            bus.activity(f"API error: {error_msg}", "fail")
-            bus.set_state(bus.ERROR, error_msg[:160])
+            cloud_error = e
+    else:
+        cloud_error = Exception("API key is not configured")
 
-            # Order matters here. "Invalid token" means the API *key* was rejected, but
-            # it contains the substring "token" -- so a quota check that greps for
-            # "token" first will blame the monthly allowance and send you hunting a
-            # billing problem when the real fix is pasting a valid key.
-            if (status in (401, 403) or "invalid token" in low or "unauthorized" in low
-                    or "invalid api key" in low or "authentication" in low):
-                speak("My API key was rejected, Sir. Please check the key in main.py.")
-            elif ("quota" in low or "balance" in low or "insufficient" in low
-                    or "exceeded" in low or "每月" in low):
-                speak("invalid token。")
-            else:
-                speak(f"error: {error_msg}")
+    # -----------------------------------------------------------------------
+    # Priority 2 (FALLBACK): Local Fine-Tuned Model (Ollama / ron:latest)
+    # Activates ONLY when cloud LLM fails (internet down, timeout, or API key problem)
+    # -----------------------------------------------------------------------
+    if not reply:
+        try:
+            from models import ollama_client
+            if ollama_client.is_ollama_available() and ollama_client.is_model_installed("ron"):
+                bus.set_state(bus.THINKING, "RON NEURAL ENGINE (OFFLINE FALLBACK)")
+                bus.activity("Cloud unavailable; using local Qwen model", "pending")
+                offline_res = ollama_client.run_offline_command(user_input)
+                if offline_res.get("ok"):
+                    bus.meta(model=f"{MODEL} (Offline Fallback -> Qwen 0.5B)", api_ok=False)
+                    if offline_res.get("type") == "tool" and offline_res.get("tool"):
+                        reply = json.dumps(offline_res["tool"])
+                    else:
+                        reply = offline_res.get("reply", "")
+                    if reply:
+                        bus.activity("Offline response generated", "ok")
+        except Exception as e:
+            logger.debug(f"[Offline Fallback Error]: {e}")
+
+    # -----------------------------------------------------------------------
+    # If neither Cloud LLM nor Local Fallback succeeded, report error
+    # -----------------------------------------------------------------------
+    if not reply:
+        if not has_api_key:
+            msg = "OpenAI API key is not configured, Sir. Please set OPENAI_API_KEY." if bus.get_language() != "bn" else "ওপেনএআই এপিআই কি কনফিগার করা নেই, স্যার।"
+            bus.activity("Missing API Key", "fail")
+            bus.set_state(bus.ERROR, "MISSING API KEY")
+            speak(msg)
             return
+
+        error_msg = str(cloud_error)
+        # OpenAI-style errors carry the useful text in .body['message']
+        if hasattr(cloud_error, 'body') and isinstance(cloud_error.body, dict):
+            error_msg = cloud_error.body.get('message', error_msg)
+        status = getattr(cloud_error, "status_code", None)
+        low = error_msg.lower()
+        print(f"[API Error: {error_msg}]")
+        bus.meta(api_ok=False)
+        bus.activity(f"API error: {error_msg}", "fail")
+        bus.set_state(bus.ERROR, error_msg[:160])
+
+        # Order matters here. "Invalid token" means the API *key* was rejected, but
+        # it contains the substring "token" -- so a quota check that greps for
+        # "token" first will blame the monthly allowance and send you hunting a
+        # billing problem when the real fix is pasting a valid key.
+        if (status in (401, 403) or "invalid token" in low or "unauthorized" in low
+                or "invalid api key" in low or "authentication" in low):
+            speak("My API key was rejected, Sir. Please check the key in main.py.")
+        elif ("quota" in low or "balance" in low or "insufficient" in low
+                or "exceeded" in low or "每月" in low):
+            speak("invalid token。")
+        else:
+            speak(f"error: {error_msg}")
+        return
 
     conversation_history.append({"role": "assistant", "content": reply})
     _trim_context()
