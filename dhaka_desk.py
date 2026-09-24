@@ -19,6 +19,7 @@ Real-time Bangladeshi intelligence harvester and broadcast desk:
 
 import concurrent.futures
 import datetime
+import email.utils
 import html
 import io
 import json
@@ -38,13 +39,14 @@ CACHE_FILE = os.path.join(CACHE_DIR, "dhaka_cache.json")
 _cache_lock = threading.Lock()
 _mem_cache = {}
 _CACHE_TTL = 900  # 15 minutes
+MAX_ARTICLE_AGE_HOURS = 36.0  # Drop stale, archived, or legacy articles older than 36h
 
 # ---------------------------------------------------------------------------
-# Feed Registry
+# Feed Registry (100% Real-Time Live 2026 Feeds)
 # ---------------------------------------------------------------------------
 
 BD_FEEDS = [
-    # --- NATIONAL / GENERAL ---
+    # --- NATIONAL / BREAKING ---
     {
         "name": "Prothom Alo",
         "url": "https://www.prothomalo.com/feed/",
@@ -58,20 +60,26 @@ BD_FEEDS = [
         "lang": "en"
     },
     {
-        "name": "The Daily Star",
-        "url": "https://www.thedailystar.net/frontpage/rss.xml",
-        "default_category": "national",
-        "lang": "en"
-    },
-    {
         "name": "Google News BD",
         "url": "https://news.google.com/rss/search?q=when:24h+Bangladesh&hl=bn&gl=BD&ceid=BD:bn",
         "default_category": "national",
         "lang": "bn"
     },
     {
-        "name": "TBS News",
-        "url": "https://www.tbsnews.net/rss.xml",
+        "name": "Google News BD English",
+        "url": "https://news.google.com/rss/search?q=when:24h+Bangladesh&hl=en-BD&gl=BD&ceid=BD:en",
+        "default_category": "national",
+        "lang": "en"
+    },
+    {
+        "name": "The Daily Star",
+        "url": "https://news.google.com/rss/search?q=when:24h+site:thedailystar.net&hl=en-BD&gl=BD&ceid=BD:en",
+        "default_category": "national",
+        "lang": "en"
+    },
+    {
+        "name": "Dhaka Tribune",
+        "url": "https://news.google.com/rss/search?q=when:24h+site:dhakatribune.com&hl=en-BD&gl=BD&ceid=BD:en",
         "default_category": "national",
         "lang": "en"
     },
@@ -84,12 +92,6 @@ BD_FEEDS = [
         "lang": "en"
     },
     {
-        "name": "The Daily Star Business",
-        "url": "https://www.thedailystar.net/business/rss.xml",
-        "default_category": "economy",
-        "lang": "en"
-    },
-    {
         "name": "Google News BD Economy",
         "url": "https://news.google.com/rss/search?q=when:24h+Bangladesh+economy+OR+%E0%A6%85%E0%A6%B0%E0%A7%8D%E0%A6%a5%E0%A6%A8%E0%A7%80%E0%A6%a4%E0%A6%BF&hl=bn&gl=BD&ceid=BD:bn",
         "default_category": "economy",
@@ -98,25 +100,19 @@ BD_FEEDS = [
 
     # --- CRICKET & SPORTS ---
     {
-        "name": "The Daily Star Cricket",
-        "url": "https://www.thedailystar.net/sports/cricket/rss.xml",
-        "default_category": "sports",
-        "lang": "en"
-    },
-    {
         "name": "Google News BD Cricket",
         "url": "https://news.google.com/rss/search?q=when:24h+Bangladesh+cricket+OR+BCB&hl=bn&gl=BD&ceid=BD:bn",
         "default_category": "sports",
         "lang": "bn"
     },
-
-    # --- TECH & INNOVATION ---
     {
-        "name": "The Daily Star Tech",
-        "url": "https://www.thedailystar.net/tech-startup/rss.xml",
-        "default_category": "tech",
+        "name": "Google News BD Cricket English",
+        "url": "https://news.google.com/rss/search?q=when:24h+Bangladesh+cricket&hl=en-BD&gl=BD&ceid=BD:en",
+        "default_category": "sports",
         "lang": "en"
     },
+
+    # --- TECH & INNOVATION ---
     {
         "name": "TBS Tech",
         "url": "https://www.tbsnews.net/tech/rss.xml",
@@ -187,12 +183,62 @@ def _clean_title(title: str) -> str:
     return title.strip()
 
 
+def _parse_pubdate(date_str: str) -> float:
+    """Parse RFC 2822 or ISO 8601 date strings to UTC epoch timestamp."""
+    if not date_str:
+        return 0.0
+    date_str = str(date_str).strip()
+    try:
+        dt = email.utils.parsedate_to_datetime(date_str)
+        if dt is not None:
+            return dt.timestamp()
+    except Exception:
+        pass
+
+    try:
+        iso_str = date_str.replace("Z", "+00:00")
+        dt = datetime.datetime.fromisoformat(iso_str)
+        return dt.timestamp()
+    except Exception:
+        pass
+
+    return 0.0
+
+
+def _format_relative_time(timestamp: float, lang: str = "bn") -> str:
+    """Convert timestamp into human-readable relative time (e.g. '15m ago', '১ ঘণ্টা আগে')."""
+    if timestamp <= 0:
+        return ""
+    diff = max(0, int(time.time() - timestamp))
+    mins = diff // 60
+    hours = diff // 3600
+    days = hours // 24
+
+    if days >= 1:
+        if lang == "bn":
+            bn_days = str(days).translate(str.maketrans("0123456789", "০১২৩৪৫৬৭৮৯"))
+            return f"{bn_days} দিন আগে"
+        return f"{days}d ago"
+    elif hours >= 1:
+        if lang == "bn":
+            bn_hrs = str(hours).translate(str.maketrans("0123456789", "০১২৩৪৫৬৭৮৯"))
+            return f"{bn_hrs} ঘণ্টা আগে"
+        return f"{hours}h ago"
+    elif mins >= 1:
+        if lang == "bn":
+            bn_mins = str(mins).translate(str.maketrans("0123456789", "০১২৩৪৫৬৭৮৯"))
+            return f"{bn_mins} মিনিট আগে"
+        return f"{mins}m ago"
+    else:
+        return "এইমাত্র" if lang == "bn" else "just now"
+
+
 # ---------------------------------------------------------------------------
 # Feed Harvester
 # ---------------------------------------------------------------------------
 
 def _fetch_feed(feed_cfg: dict, timeout: float = 3.0) -> list:
-    """Fetch and parse a single RSS/Atom feed into article dicts."""
+    """Fetch and parse a single RSS/Atom feed into article dicts with real-time age verification."""
     url = feed_cfg["url"]
     source_name = feed_cfg["name"]
     default_cat = feed_cfg.get("default_category", "national")
@@ -211,17 +257,18 @@ def _fetch_feed(feed_cfg: dict, timeout: float = 3.0) -> list:
         return []
 
     articles = []
+    now_ts = time.time()
     try:
         root = ET.fromstring(data)
         items = root.findall(".//item")
         if not items:
             items = root.findall(".//{http://www.w3.org/2005/Atom}entry")
 
-        for item in items[:20]:
+        for item in items[:25]:
             title_node = item.find("title")
             if title_node is None:
                 title_node = item.find("{http://www.w3.org/2005/Atom}title")
-            raw_title = title_node.text if title_node is not None else ""
+            raw_title = "".join(title_node.itertext()).strip() if title_node is not None else ""
             title = _clean_text(_clean_title(raw_title))
             if not title or len(title) < 8:
                 continue
@@ -240,32 +287,56 @@ def _fetch_feed(feed_cfg: dict, timeout: float = 3.0) -> list:
                 desc_node = item.find("{http://www.w3.org/2005/Atom}summary")
             if desc_node is None:
                 desc_node = item.find("{http://www.w3.org/2005/Atom}content")
-            raw_desc = desc_node.text if desc_node is not None else ""
+            raw_desc = "".join(desc_node.itertext()).strip() if desc_node is not None else ""
             summary = _clean_text(raw_desc)
             if len(summary) > 220:
                 summary = summary[:217] + "..."
 
+            # Publication timestamp extraction and real-time gatekeeping
             pub_node = item.find("pubDate")
             if pub_node is None:
                 pub_node = item.find("{http://www.w3.org/2005/Atom}published")
             if pub_node is None:
                 pub_node = item.find("{http://www.w3.org/2005/Atom}updated")
-            pub_date = pub_node.text if pub_node is not None else ""
+            pub_date = "".join(pub_node.itertext()).strip() if pub_node is not None else ""
+            ts = _parse_pubdate(pub_date)
+
+            if ts > 0:
+                age_hours = (now_ts - ts) / 3600.0
+                # Discard articles older than MAX_ARTICLE_AGE_HOURS (36h), or future-skewed > 1h
+                if age_hours > MAX_ARTICLE_AGE_HOURS or age_hours < -1.0:
+                    continue
+            else:
+                # If feed specifically enforces 24h query parameter, fallback to current timestamp
+                if "when:24h" in url or "when:1d" in url:
+                    ts = now_ts
+                else:
+                    # Stale or unknown date feed item without 24h constraint: drop it
+                    continue
+
+            # Extract source node if available (e.g. Google News gives actual publisher)
+            source_node = item.find("source")
+            effective_source = "".join(source_node.itertext()).strip() if source_node is not None else source_name
+            if not effective_source:
+                effective_source = source_name
 
             cat = _classify_category(title, summary, default_cat)
 
             # Auto-detect language
             is_bangla = any("\u0980" <= ch <= "\u09FF" for ch in title)
             article_lang = "bn" if is_bangla else feed_lang
+            rel_time = _format_relative_time(ts, lang=article_lang)
 
             articles.append({
                 "id": str(abs(hash(title + link)) % 10000000),
                 "title": title,
                 "url": link,
                 "summary": summary,
-                "source": source_name,
+                "source": effective_source,
                 "category": cat,
+                "timestamp": ts,
                 "published_at": pub_date,
+                "relative_time": rel_time,
                 "lang": article_lang,
             })
     except Exception:
@@ -279,7 +350,7 @@ def _fetch_feed(feed_cfg: dict, timeout: float = 3.0) -> list:
 # ---------------------------------------------------------------------------
 
 def harvest_all(force_refresh: bool = False, max_workers: int = 10) -> dict:
-    """Concurrently harvest all Bangladeshi feeds with deduplication and caching."""
+    """Concurrently harvest all Bangladeshi feeds with deduplication, chronological sorting, and caching."""
     global _mem_cache
     now = time.time()
 
@@ -320,7 +391,9 @@ def harvest_all(force_refresh: bool = False, max_workers: int = 10) -> dict:
         seen_titles.add(norm)
         deduped.append(art)
 
-    # Sort: prioritize Bangla articles and latest publications
+    # Chronological sort: newest real-time articles first
+    deduped.sort(key=lambda a: a.get("timestamp", 0.0), reverse=True)
+
     # Category segmentation
     categories = {
         "all": deduped,
